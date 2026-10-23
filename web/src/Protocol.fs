@@ -121,14 +121,6 @@ let parseCircuit (text: string) : Result<Connectome.Circuit, string> =
               // The fly file has no gap junctions.
               Gaps = if isNull raw?gaps then [||] else numbers raw?gaps
               Cloud = numbers raw?cloud
-              Steps = if jsTypeof raw?steps = "number" then unbox<int> raw?steps else -1
-              Seed =
-                if isNull raw?seed then
-                    None
-                else
-                    Some
-                        { Encoder = list raw?seed?encoder |> Array.map numbers
-                          Gain = numbers raw?seed?gain
-                          Threshold = numbers raw?seed?threshold } }
+              Steps = if jsTypeof raw?steps = "number" then unbox<int> raw?steps else -1 }
     with e ->
         Error e.Message

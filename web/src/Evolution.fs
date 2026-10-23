@@ -19,12 +19,8 @@ let net =
       Crossover = Brain.crossover
       Mind = Net }
 
-/// With a seed genome, the first generation is mutated copies of it instead of random genomes.
-let connectome (circuit: Connectome.Circuit) =
-    { Random =
-        match circuit.Seed with
-        | Some seed -> fun rng -> Connectome.crossover rng seed seed
-        | None -> Connectome.random circuit
+let connectome circuit =
+    { Random = Connectome.random circuit
       Crossover = Connectome.crossover
       Mind = fun genome -> Wired(circuit, genome) }
 

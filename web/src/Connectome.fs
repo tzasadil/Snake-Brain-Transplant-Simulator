@@ -42,11 +42,9 @@ type Circuit =
       Cloud: float[]
       /// Update steps per snake move: the longest input-to-steering path the extraction kept.
       /// Activity resets each move, so the same position always gives the same turn and replays stay exact.
-      Steps: int
-      /// A pretrained genome (web/tools/pretrain.fsx). New populations start from mutated copies of it.
-      Seed: Genome option }
+      Steps: int }
 
-and Genome =
+type Genome =
     { /// Snake input i -> input neuron m.
       Encoder: float[][]
       /// Natural log of each neuron's gain, so gains stay positive.
@@ -65,8 +63,7 @@ type Raw =
       /// Flat from, to, weight triples, one per direction.
       Gaps: float[]
       Cloud: float[]
-      Steps: int
-      Seed: Genome option }
+      Steps: int }
 
 /// Groups triples by their second index, the neuron they act on, so one pass computes every neuron's input.
 let private group n (triples: (int * int * float)[]) =
@@ -109,15 +106,6 @@ let build (raw: Raw) =
     // More steps cost time on every move, and paths longer than 10 hops carry almost nothing after normalization.
     elif steps < 1 || steps > 10 then
         Error "steps must be 1 to 10"
-    elif
-        raw.Seed
-        |> Option.exists (fun g ->
-            g.Encoder.Length <> inputCount
-            || g.Encoder |> Array.exists (fun row -> row.Length <> inputs.Length)
-            || g.Gain.Length <> n
-            || g.Threshold.Length <> n)
-    then
-        Error "seed genome does not fit the circuit"
     elif not (Array.forall valid inputs) || Array.isEmpty inputs then
         Error "bad input neurons"
     elif not (Array.forall (fst >> valid) (Array.append left right)) || Array.isEmpty left || Array.isEmpty right then
@@ -155,8 +143,7 @@ let build (raw: Raw) =
                   GapPeer = gapPeer
                   GapWeight = gapWeight
                   Cloud = cloud
-                  Steps = steps
-                  Seed = raw.Seed }
+                  Steps = steps }
 
 /// Activity of every neuron after `c.Steps` updates of h <- relu(gain * (W h + G h + drive) - threshold).
 /// Gap junctions add a share of the partner's activity. A difference term, G (h_peer - h), would need activity

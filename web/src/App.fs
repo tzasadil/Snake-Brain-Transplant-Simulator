@@ -148,29 +148,16 @@ let private swap (c: Champion<Mind.Mind>) (r: Replay) =
         Champion = c
         Thought = Mind.think c.Brain (vision r.Game) }
 
-/// The pretrained seed as generation 0. Good snakes play long games, so a seeded first generation takes
-/// seconds to train, and the board would sit empty meanwhile. It is never added to the chart.
-let private seedChampion () : Champion<Mind.Mind> option =
-    circuit ()
-    |> Option.bind (fun c ->
-        c.Seed
-        |> Option.map (fun genome ->
-            { Generation = 0
-              Brain = Mind.Wired(c, genome)
-              Seed = newSeed ()
-              Score = 0 }))
-
 let private nextChampion () =
     match pick with
     | Latest -> Seq.tryLast champions
     | Fixed gen when gen >= 1 && gen <= champions.Count -> Some champions[gen - 1]
-    // Generation 0 is the seed, which has no slot in the list.
-    | Fixed _ -> seedChampion ()
+    | Fixed _ -> None
 
 let private advance t =
     match show with
     | Waiting ->
-        match nextChampion () |> Option.orElse (seedChampion ()) with
+        match nextChampion () with
         | Some c ->
             show <- begin' c
             lastMove <- t
@@ -184,7 +171,7 @@ let private advance t =
             | Dead(death, _) -> Ended(r, Died death, t)
             | Won g -> Ended({ r with Game = g }, Filled, t)
     | Ended(_, _, at) when t - at >= endHoldMs ->
-        nextChampion () |> Option.orElse (seedChampion ()) |> Option.iter (fun c -> show <- begin' c)
+        nextChampion () |> Option.iter (fun c -> show <- begin' c)
         lastMove <- t
     | Playing _
     | Ended _ -> ()
