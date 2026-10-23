@@ -41,12 +41,23 @@ type private Result<'G> =
 /// Without it every population settles on turning one way only, and the most one-sided stall around score 26.
 let private minTurnShare = 0.25
 
+/// Partial credit before the first fruit. Until some snake eats, every score is 0, selection is blind, and a
+/// population can stay stuck forever (worm runs did). Each move toward the fruit counts +1, each move away -1,
+/// and the net saturates at this many moves. The bonus stays below one fruit, so eating always wins.
+let private approachMoves = 50.0
+let private approachBonus = 0.9
+
+let private distance (g: Game.Game) =
+    let head = List.head g.Body
+    abs (head.X - g.Fruit.X) + abs (head.Y - g.Fruit.Y)
+
 /// Plays one game to the end. Same brain and seed => same game.
-/// Fitness is the score, scaled down when the snake turns one way more than 3:1.
+/// Fitness is the score, scaled down when the snake turns one way more than 3:1, plus credit for approaching fruit.
 /// A penalty, not a hard limit: early in a game one turn is 100% one side, and a snake overridden by the rules never learns.
+/// The approach credit is added after the balance penalty, so a snake that never turns still gets a gradient.
 let trial (mind: Mind) seed =
     let mutable step = Game.Alive(Game.start seed)
-    let mutable lefts, rights = 0, 0
+    let mutable lefts, rights, approach = 0, 0, 0
 
     while (match step with
            | Game.Alive _ -> true
@@ -61,9 +72,15 @@ let trial (mind: Mind) seed =
 
         step <- Game.step turn g
 
+        match step with
+        // Eating moves the fruit, so only moves toward the same fruit compare.
+        | Game.Alive next when next.Fruit = g.Fruit -> approach <- approach + compare (distance g) (distance next)
+        | _ -> ()
+
     let score = (Game.state step).Score
     let share = if lefts + rights = 0 then 0.0 else float (min lefts rights) / float (lefts + rights)
-    score, float score * min 1.0 (share / minTurnShare)
+    let credit = approachBonus * min 1.0 (max 0.0 (float approach) / approachMoves)
+    score, float score * min 1.0 (share / minTurnShare) + credit
 
 /// Trains in slices, so the browser can draw between them.
 type Trainer<'G>(seed: uint32, species: Species<'G>) =
