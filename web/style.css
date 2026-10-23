@@ -197,3 +197,17 @@ label {
   top: 10px;
   right: 14px;
 }
+
+/* Replay stats on the left, replay speed bottom right. */
+.board-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Stays bottom right when it wraps under the stats on narrow screens. */
+.board-foot label {
+  margin-left: auto;
+}

@@ -19,11 +19,21 @@
       <section class="stage">
         <figure class="panel">
           <canvas id="board" class="board" role="img" aria-label="Snake board with vision rays"></canvas>
-          <dl class="stats">
-            <div><dt>Generation</dt><dd id="generation">–</dd></div>
-            <div><dt>Score</dt><dd id="score">0</dd></div>
-            <div><dt>Status</dt><dd id="outcome">Training</dd></div>
-          </dl>
+          <div class="board-foot">
+            <dl class="stats">
+              <div><dt>Generation</dt><dd id="generation">–</dd></div>
+              <div><dt>Score</dt><dd id="score">0</dd></div>
+              <div><dt>Status</dt><dd id="outcome">Training</dd></div>
+            </dl>
+            <label>Speed
+              <select id="speed">
+                <option value="1">1×</option>
+                <option value="2" selected>2×</option>
+                <option value="4">4×</option>
+                <option value="8">8×</option>
+              </select>
+            </label>
+          </div>
         </figure>
 
         <figure class="panel brain">
@@ -74,14 +84,6 @@
           </dl>
           <button id="train" type="button">Pause</button>
           <label><input id="follow" type="checkbox" checked /> Follow latest</label>
-          <label>Speed
-            <select id="speed">
-              <option value="1">1×</option>
-              <option value="2" selected>2×</option>
-              <option value="4">4×</option>
-              <option value="8">8×</option>
-            </select>
-          </label>
           <button id="restart" type="button">Restart</button>
         </div>
       </section>
