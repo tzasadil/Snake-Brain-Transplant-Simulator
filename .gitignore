@@ -264,3 +264,6 @@ __pycache__/
 web/build/
 web/dist/
 .fable/
+
+# Raw connectome downloads (about 1.2 GB), kept locally so they do not vanish with /tmp. Sources in web/tools/*.py.
+web/tools/source-data/

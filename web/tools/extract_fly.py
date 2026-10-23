@@ -1,13 +1,15 @@
 """Extracts the steering subcircuit of the male fruit fly connectome for the browser's fruit fly mode.
 
 Data: Male CNS v1.0 (FlyEM at HHMI Janelia, Cambridge, MRC LMB, Google Research), CC-BY 4.0.
-Download the three flat-connectome files from https://male-cns.janelia.org/download/ into one directory:
+Download the three flat-connectome files from https://male-cns.janelia.org/download/ into one directory.
+Local copies live in web/tools/source-data/fly-male-cns-v1.0/ (gitignored, about 1.1 GB):
   body-annotations-male-cns-v1.0-minconf-0.5.feather
   body-neurotransmitters-male-cns-v1.0.feather
   connectome-weights-male-cns-v1.0-minconf-0.5.feather   (1.1 GB, 152M rows)
 
 Run:
-  uv run --no-project --with pyarrow --with pandas --with scipy python -I web/tools/extract_fly.py <data dir> web/data/fly-circuit.json
+  uv run --no-project --with pyarrow --with pandas --with scipy python -I web/tools/extract_fly.py \
+    web/tools/source-data/fly-male-cns-v1.0 web/data/fly-circuit.json
 
 The full brain (166k neurons) is far too large to download and evolve in a browser, so this keeps the
 neurons that carry the most signal from vision to steering. Signal flows forward from the visual projection

@@ -1,6 +1,6 @@
 """Builds the whole C. elegans nervous system for the browser's worm mode.
 
-Data, all redistributed by OpenWorm:
+Data, all redistributed by OpenWorm. Local copies live in web/tools/source-data/worm/ (gitignored):
   Wiring: CElegansNeuronTables.xls, sheet Connectome (Varshney et al., PLoS Comput Biol 2011, CC BY),
     https://github.com/openworm/ConnectomeToolbox/blob/main/cect/data/CElegansNeuronTables.xls
   Transmitters: elife-95402-supp2-v1.xlsx (Wang et al., eLife 2024, CC BY), column "Neurotransmitter(s)",
@@ -10,7 +10,8 @@ Data, all redistributed by OpenWorm:
 
 Run:
   uv run --no-project --with pandas --with xlrd --with openpyxl python -I web/tools/extract_worm.py \
-    <CElegansNeuronTables.xls> <elife-95402-supp2-v1.xlsx> <cell.nml dir> web/data/worm-circuit.json
+    web/tools/source-data/worm/CElegansNeuronTables.xls web/tools/source-data/worm/elife-95402-supp2-v1.xlsx \
+    web/tools/source-data/worm/generatedNeuroML2 web/data/worm-circuit.json
 
 Unlike the fruit fly, the worm is small enough to keep every neuron and every connection.
 """
