@@ -119,5 +119,6 @@ let parseCircuit (text: string) : Result<Fly.Circuit, string> =
             (pairs raw?right)
             (numbers raw?edges)
             (numbers raw?cloud)
+            (if jsTypeof raw?steps = "number" then unbox<int> raw?steps else -1)
     with e ->
         Error e.Message

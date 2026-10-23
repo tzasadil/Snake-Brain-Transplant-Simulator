@@ -34,7 +34,10 @@ type Circuit =
       Pre: int[]
       Weight: float[]
       /// Soma positions sampled from the whole brain, flat x, y pairs. Only drawn, never simulated.
-      Cloud: float[] }
+      Cloud: float[]
+      /// Update steps per snake move: the longest input-to-steering path the extraction kept.
+      /// Activity resets each move, so the same position always gives the same turn and replays stay exact.
+      Steps: int }
 
 type Genome =
     { /// Snake input i -> input neuron m.
@@ -44,7 +47,7 @@ type Genome =
       Threshold: float[] }
 
 /// Validates the extracted circuit. It is the boundary between the JSON file and the simulation.
-let build (neurons: (string * string * string * float * float)[]) (inputs: int[]) (left: (int * float)[]) (right: (int * float)[]) (edges: float[]) (cloud: float[]) =
+let build (neurons: (string * string * string * float * float)[]) (inputs: int[]) (left: (int * float)[]) (right: (int * float)[]) (edges: float[]) (cloud: float[]) (steps: int) =
     let n = neurons.Length
     let valid i = i >= 0 && i < n
 
@@ -65,6 +68,9 @@ let build (neurons: (string * string * string * float * float)[]) (inputs: int[]
         Error "edges must be pre, post, weight triples"
     elif cloud.Length % 2 <> 0 then
         Error "cloud must be x, y pairs"
+    // More steps cost time on every move, and paths longer than 10 hops carry almost nothing after normalization.
+    elif steps < 1 || steps > 10 then
+        Error "steps must be 1 to 10"
     elif not (Array.forall valid inputs) || Array.isEmpty inputs then
         Error "bad input neurons"
     elif not (Array.forall (fst >> valid) (Array.append left right)) || Array.isEmpty left || Array.isEmpty right then
@@ -101,13 +107,10 @@ let build (neurons: (string * string * string * float * float)[]) (inputs: int[]
                   Start = start
                   Pre = sorted |> Array.map (fun (pre, _, _) -> pre)
                   Weight = sorted |> Array.map (fun (_, _, w) -> w)
-                  Cloud = cloud }
+                  Cloud = cloud
+                  Steps = steps }
 
-/// Update steps per snake move. Inputs reach the steering neurons in 1 hop and loops add 2 to 3 more.
-/// Activity resets each move, so the same position always gives the same turn and replays stay exact.
-let private steps = 4
-
-/// Activity of every neuron after `steps` updates of h <- relu(gain * (W h + drive) - threshold).
+/// Activity of every neuron after `c.Steps` updates of h <- relu(gain * (W h + drive) - threshold).
 let think (c: Circuit) (g: Genome) (input: float[]) =
     let n = c.Neurons.Length
     let drive = Array.zeroCreate<float> n
@@ -123,7 +126,7 @@ let think (c: Circuit) (g: Genome) (input: float[]) =
     let gain = g.Gain |> Array.map exp
     let mutable h = Array.zeroCreate<float> n
 
-    for _ in 1..steps do
+    for _ in 1 .. c.Steps do
         let next = Array.zeroCreate<float> n
 
         for j in 0 .. n - 1 do

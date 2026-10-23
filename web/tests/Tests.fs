@@ -67,7 +67,7 @@ let tests =
                      "DNa02", "R", "output", 1.0, 1.0 |]
 
               let circuit =
-                  match Fly.build neurons [| 0; 1 |] [| 2, 1.0 |] [| 3, 1.0 |] [| 0.0; 2.0; 1.0; 1.0; 3.0; 1.0 |] [||] with
+                  match Fly.build neurons [| 0; 1 |] [| 2, 1.0 |] [| 3, 1.0 |] [| 0.0; 2.0; 1.0; 1.0; 3.0; 1.0 |] [||] 2 with
                   | Ok c -> c
                   | Error e -> failtest e
 
