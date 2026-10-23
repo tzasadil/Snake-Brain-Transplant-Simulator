@@ -1,0 +1,14 @@
+{
+  "name": "snake-evo-web",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.15.0",
+  "scripts": {
+    "start": "dotnet fable watch src -o build -e .js --run vite",
+    "build": "dotnet fable src -o build -e .js --run vite build",
+    "test": "dotnet run --project tests"
+  },
+  "devDependencies": {
+    "vite": "8.3.5"
+  }
+}

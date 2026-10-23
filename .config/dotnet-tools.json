@@ -6,7 +6,15 @@
       "version": "11.2.0",
       "commands": [
         "fsdocs"
-      ]
+      ],
+      "rollForward": false
+    },
+    "fable": {
+      "version": "5.24.0",
+      "commands": [
+        "fable"
+      ],
+      "rollForward": false
     }
   }
 }

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Snake evolution</title>
+    <meta name="description" content="Neural networks evolve to play Snake, live in your browser." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Crect width='10' height='10' rx='2' fill='%234ade80'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Snake evolution</h1>
+        <p>Neural networks evolve to play Snake, live in your browser.</p>
+        <a href="https://github.com/tzasadil/Snake-game-evo-optimizer">Source</a>
+      </header>
+
+      <section class="stage">
+        <figure class="panel">
+          <canvas id="board" class="board" role="img" aria-label="Snake board with vision rays"></canvas>
+          <dl class="stats">
+            <div><dt>Generation</dt><dd id="generation">–</dd></div>
+            <div><dt>Score</dt><dd id="score">0</dd></div>
+            <div><dt>Status</dt><dd id="outcome">Training</dd></div>
+          </dl>
+        </figure>
+
+        <figure class="panel">
+          <canvas id="network" class="network" role="img"
+            aria-label="Neural network: 24 vision inputs, 18 hidden neurons, 3 outputs"></canvas>
+          <ul class="legend">
+            <li style="--swatch: var(--wall)">Wall</li>
+            <li style="--swatch: var(--snake)">Body</li>
+            <li style="--swatch: var(--fruit)">Fruit</li>
+            <li style="--swatch: var(--positive)">Weight +</li>
+            <li style="--swatch: var(--negative)">Weight −</li>
+          </ul>
+        </figure>
+      </section>
+
+      <section class="panel history">
+        <canvas id="chart" class="chart" tabindex="0" role="slider" aria-label="Generation to replay"
+          aria-valuemin="1" aria-valuemax="1" aria-valuenow="1"></canvas>
+        <div class="controls">
+          <dl class="stats">
+            <div><dt>Trained</dt><dd id="trained">0</dd></div>
+          </dl>
+          <button id="train" type="button">Pause</button>
+          <label><input id="follow" type="checkbox" checked /> Follow latest</label>
+          <label>Speed
+            <select id="speed">
+              <option value="1">1×</option>
+              <option value="2" selected>2×</option>
+              <option value="4">4×</option>
+              <option value="8">8×</option>
+            </select>
+          </label>
+          <button id="restart" type="button">Restart</button>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="./build/App.js"></script>
+  </body>
+</html>

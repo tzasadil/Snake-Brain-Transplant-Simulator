@@ -1,0 +1,178 @@
+/* Canvas colors mirror these in View.fs (module Color). */
+:root {
+  --bg: #0d0f15;
+  --panel: #151821;
+  --border: #262b38;
+  --text: #e6e8ee;
+  --muted: #8a91a3;
+  --wall: #94a3b8;
+  --snake: #4ade80;
+  --fruit: #f87171;
+  --positive: #60a5fa;
+  --negative: #fb923c;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 system-ui, sans-serif;
+}
+
+main {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 24px 16px 40px;
+  display: grid;
+  gap: 16px;
+}
+
+header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 22px;
+}
+
+header p {
+  margin: 0;
+  color: var(--muted);
+  flex: 1;
+}
+
+a {
+  color: var(--positive);
+}
+
+.panel {
+  margin: 0;
+  padding: 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.stage {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: 16px;
+}
+
+@media (max-width: 760px) {
+  .stage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+canvas {
+  display: block;
+  width: 100%;
+}
+
+.board {
+  aspect-ratio: 1;
+  border-radius: 6px;
+}
+
+.network {
+  aspect-ratio: 6 / 5;
+}
+
+.chart {
+  height: 120px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.chart:focus-visible,
+button:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--positive);
+  outline-offset: 2px;
+}
+
+.stats {
+  margin: 0;
+  display: flex;
+  gap: 24px;
+}
+
+.stats dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.stats dd {
+  margin: 0;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.legend {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.legend li::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--swatch);
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+}
+
+.controls .stats {
+  margin-right: auto;
+}
+
+button,
+select {
+  font: inherit;
+  color: var(--text);
+  background: var(--border);
+  border: 1px solid #343a4a;
+  border-radius: 6px;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+
+button:hover,
+select:hover {
+  background: #303648;
+}
+
+label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}

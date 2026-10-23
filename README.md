@@ -2,7 +2,9 @@
 
 A Snake game in F# where a genetic algorithm evolves neural networks that learn to play it. You can play yourself, train a population, or watch the best snake of any past generation.
 
-<!-- TODO: add a GIF of a trained snake playing. It is the first thing a visitor should see. -->
+**[Watch it evolve in your browser](https://tzasadil.github.io/Snake-game-evo-optimizer/)**
+
+![Generation 1 starves, then generation 74 hunts fruit while its network lights up](docs/demo.gif)
 
 ## How it works
 
@@ -10,7 +12,8 @@ A Snake game in F# where a genetic algorithm evolves neural networks that learn 
 - **Senses**: the snake looks in 8 directions and measures the distance to the nearest wall, its own body, and fruit (24 inputs). The view rotates with the snake, so "left" always means the snake's left.
 - **Brain**: a small multi-layer perceptron, 24 -> 18 -> 3 neurons with ReLU. The 3 outputs are turn left, go straight, and turn right.
 - **Evolution**: 100 snakes play one game each in parallel. The two best survive unchanged (elitism). Fitter snakes are more likely to be picked as parents. Children mix parent weights at random, then mutate a few of them.
-- **GUI**: WPF in strict MVVM. `PropertyChanged.Fody` injects `INotifyPropertyChanged`, so the view models stay plain F#.
+- **Browser**: the same rules, compiled to JavaScript with Fable. Training runs in a Web Worker. The page replays each generation's best game and shows which neurons drive each move.
+- **Desktop GUI**: WPF in strict MVVM. `PropertyChanged.Fody` injects `INotifyPropertyChanged`, so the view models stay plain F#.
 
 ## What I learned
 
@@ -19,8 +22,30 @@ A Snake game in F# where a genetic algorithm evolves neural networks that learn 
 - Fruit on edges and in corners is the main failure. Many evolved snakes learn to patrol the edges.
 - Most populations learn to turn in only one direction. Forcing both directions would need special training exercises.
 - Late-game deaths come from limited vision: the snake only sees along 8 rays, not the whole board.
+- Fable 5 checks the bounds of every array read in a library call. In the browser that made training 17x slower than on .NET. Plain JS indexing in the hot loops cut the gap to about 4x.
 
 ## Run
+
+### Browser
+
+Needs the .NET 10 SDK and Node.js with pnpm.
+
+1. Go to `web/`.
+2. Run `dotnet tool restore`.
+3. Run `pnpm install`.
+4. Run `pnpm start` and open the printed URL.
+
+`pnpm build` writes the static site to `web/dist/`. `pnpm test` runs the rule tests.
+
+| Control | Action |
+|---|---|
+| Score chart | Replay the best game of that generation. Arrow keys work too. |
+| `Pause` / `Resume` | Stop or continue training. It also pauses every 300 generations. |
+| `Follow latest` | Always replay the newest generation |
+| `Speed` | Replay speed |
+| `Restart` | Train a new random population |
+
+### Desktop
 
 Windows only (.NET Framework 4.8, WPF).
 
@@ -47,6 +72,12 @@ Windows only (.NET Framework 4.8, WPF).
 | `Settings.fs` | Grid size, network shape, and mutation rates |
 | `MainWindow.xaml.fs` | View model and commands |
 | `ExampleSnake.fs` | A pretrained snake, noted for its jiggly style |
+| `web/src/Game.fs` | Browser port of the rules and vision, as pure functions |
+| `web/src/Brain.fs` | Browser port of the network, crossover, and mutation |
+| `web/src/Evolution.fs` | Browser port of selection and the training loop |
+| `web/src/Worker.fs` | Trains off the main thread |
+| `web/src/View.fs` | Draws the board, the network, and the score chart |
+| `web/src/App.fs` | Replay loop and page controls |
 
 [Architecture diagram](https://drive.google.com/file/d/1WRbTG-MDYLCUJCyy3G-27LuXoD9cK_V1/view?usp=sharing)
 
