@@ -9,9 +9,9 @@ A Snake game in F# where a genetic algorithm evolves neural networks that learn 
 ## How it works
 
 - **Game**: 10x10 grid. The snake grows when it eats fruit and dies when it hits a wall or itself. It also starves if it goes too long without food, so a network cannot score by circling forever.
-- **Senses**: the snake looks in 8 directions and measures the distance to the nearest wall, its own body, and fruit (24 inputs). The view rotates with the snake, so "left" always means the snake's left.
+- **Senses**: the snake looks in 8 directions and measures the distance to the nearest wall, its own body, and fruit (24 inputs). The view rotates with the snake, so "left" always means the snake's left. The browser version adds a fruit compass (fruit offset ahead and to the right) and the snake's length, 27 inputs in total.
 - **Brain**: a small multi-layer perceptron, 24 -> 18 -> 3 neurons with ReLU. The 3 outputs are turn left, go straight, and turn right.
-- **Evolution**: 100 snakes play one game each in parallel. The two best survive unchanged (elitism). Fitter snakes are more likely to be picked as parents. Children mix parent weights at random, then mutate a few of them.
+- **Evolution**: 100 snakes play one game each in parallel. The two best survive unchanged (elitism). Fitter snakes are more likely to be picked as parents. Children mix parent weights at random, then mutate a few of them. The browser version mutates with Gaussian noise and averages 2 games per snake, with the score cut when the snake turns one way more than 3:1.
 - **Browser**: the same rules, compiled to JavaScript with Fable. Training runs in a Web Worker. The page replays each generation's best game and shows which neurons drive each move.
 - **Desktop GUI**: WPF in strict MVVM. `PropertyChanged.Fody` injects `INotifyPropertyChanged`, so the view models stay plain F#.
 
@@ -20,7 +20,8 @@ A Snake game in F# where a genetic algorithm evolves neural networks that learn 
 - A random population either spins in place or drives into a wall. It takes several generations before snakes start chasing fruit.
 - Snake gets harder as the snake grows. Unlike Tetris or Flappy Bird, speed does not set the difficulty, so the network needs a different strategy late in the game.
 - Fruit on edges and in corners is the main failure. Many evolved snakes learn to patrol the edges.
-- Most populations learn to turn in only one direction. Forcing both directions would need special training exercises.
+- Most populations learn to turn in only one direction, and the most one-sided stall around score 26. A fitness penalty for turning one way more than 3:1 fixes that.
+- The original mutation (a fixed step of 0.02) was too weak to tune new inputs, so adding inputs made snakes worse. With Gaussian mutation, turn balance, a fruit compass, and length, the mean score at generation 400 rose from 29 to 55 (6 seeds, 100 games each).
 - Late-game deaths come from limited vision: the snake only sees along 8 rays, not the whole board.
 - Fable 5 checks the bounds of every array read in a library call. In the browser that made training 17x slower than on .NET. Plain JS indexing in the hot loops cut the gap to about 4x.
 
@@ -41,7 +42,7 @@ Needs the .NET 10 SDK and Node.js with pnpm.
 |---|---|
 | Score chart | Replay the best game of that generation. Arrow keys work too. |
 | `Pause` / `Resume` | Stop or continue training. It also pauses every 300 generations. |
-| `Follow latest` | Always replay the newest generation |
+| `Follow latest` | Each new champion takes over the game in progress |
 | `Speed` | Replay speed |
 | `Restart` | Train a new random population |
 
@@ -81,4 +82,4 @@ Windows only (.NET Framework 4.8, WPF).
 
 [Architecture diagram](https://drive.google.com/file/d/1WRbTG-MDYLCUJCyy3G-27LuXoD9cK_V1/view?usp=sharing)
 
-Built at Charles University in 2019, polished in 2020 and 2021.
+Built at Charles University.

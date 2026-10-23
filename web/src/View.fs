@@ -22,6 +22,10 @@ module Color =
 /// Ray labels in vision order, as seen by the snake with forward = up.
 let private rayLabels = [| "↑"; "↗"; "→"; "↘"; "↓"; "↙"; "←"; "↖" |]
 let private senseColors = [| Color.wall; Color.snake; Color.fruit |]
+
+/// Inputs after the 24 ray inputs: fruit compass ahead and right, then snake length. See Game.vision.
+let private extraLabels = [| "fruit ↑"; "fruit →"; "length" |]
+let private extraColors = [| Color.fruit; Color.fruit; Color.snake |]
 let private outputLabels = [| "Left"; "Straight"; "Right" |]
 
 /// Matches the canvas buffer to its CSS size and pixel ratio, so drawing stays sharp.
@@ -102,12 +106,14 @@ let network (canvas: HTMLCanvasElement) (brain: Brain.Brain) (acts: float[][]) (
     let ctx, w, h = fit canvas
     let top = 14.0
     let usable = h - 2.0 * top
-    let columns = [| 44.0; w * 0.5; w - 78.0 |]
+    let columns = [| 70.0; w * 0.5; w - 78.0 |]
+    let inputs = acts[0].Length
+    let gaps = (inputs - 1) / 3
+    let inputStep = usable / (float inputs + 0.8 * float gaps)
 
-    // Inputs come in groups of 3 per ray, with a gap between groups.
+    // Inputs come in groups of 3, with a gap between groups: 8 rays, then compass and length.
     let inputY i =
-        let step = usable / (24.0 + 7.0 * 0.8)
-        top + step * (float i + 0.8 * float (i / 3)) + step * 0.5
+        top + inputStep * (float i + 0.8 * float (i / 3)) + inputStep * 0.5
 
     let evenY n i =
         let step = usable / float n
@@ -132,7 +138,7 @@ let network (canvas: HTMLCanvasElement) (brain: Brain.Brain) (acts: float[][]) (
                 line ctx columns[l] (y l i) columns[l + 1] (y (l + 1) j))
 
     ctx.globalAlpha <- 1.0
-    let radius = min 6.0 (usable / 34.0 * 0.45 |> max 2.5)
+    let radius = min 6.0 (inputStep * 0.42 |> max 2.5)
 
     for l in 0 .. acts.Length - 1 do
         let strength = peak acts[l]
@@ -140,7 +146,8 @@ let network (canvas: HTMLCanvasElement) (brain: Brain.Brain) (acts: float[][]) (
         acts[l]
         |> Array.iteri (fun i v ->
             let color =
-                if l = 0 then senseColors[i % 3]
+                if l = 0 && i < 24 then senseColors[i % 3]
+                elif l = 0 then extraColors[i - 24]
                 elif l = acts.Length - 1 && i = choice then Color.snake
                 else Color.text
 
@@ -162,6 +169,9 @@ let network (canvas: HTMLCanvasElement) (brain: Brain.Brain) (acts: float[][]) (
     ctx.fillStyle <- !^Color.muted
 
     rayLabels |> Array.iteri (fun r label -> ctx.fillText (label, columns[0] - 14.0, inputY (r * 3 + 1)))
+    ctx.font <- "12px system-ui, sans-serif"
+    extraLabels |> Array.iteri (fun i label -> ctx.fillText (label, columns[0] - 12.0, inputY (24 + i)))
+    ctx.font <- "13px system-ui, sans-serif"
 
     ctx.textAlign <- "left"
 

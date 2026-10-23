@@ -8,12 +8,12 @@ open SnakeEvo.Game
 /// layer -> neuron -> incoming weights. The last weight of each neuron multiplies the bias input.
 type Brain = float[][][]
 
-/// 24 vision inputs, 18 hidden neurons, 3 outputs: turn left, go straight, turn right.
-let layout = [| 24; 18; 3 |]
+/// Vision inputs, 18 hidden neurons, 3 outputs: turn left, go straight, turn right.
+let layout = [| inputCount; 18; 3 |]
 
 let private biasInput = 0.3
 let private mutationChance = 0.10
-let private mutationStep = 0.02
+let private mutationSigma = 0.2
 
 let random (rng: Source) : Brain =
     layout
@@ -53,15 +53,19 @@ let decide (output: float[]) =
 
     [| TurnLeft; Straight; TurnRight |][best]
 
-/// Takes each weight from a random parent, then nudges some by a fixed step.
-/// Only weights taken from the second parent mutate. The original AI.fs reads
-/// `if .. then weight1 else weight2 |> mutateWeight ..`, and precedence binds the pipe to weight2 only.
-/// Kept, so the browser evolves like the desktop app.
+/// Takes each weight from a random parent, then mutates 10% of weights by Gaussian noise (sigma 0.2).
+/// The original nudged weights by a fixed 0.02, and only those taken from the second parent
+/// (operator precedence in AI.fs). Against initial weights in (-1, 1) that step barely moved anything,
+/// so evolution only reshuffled the random start and could not learn to use new inputs.
 let crossover (rng: Source) (a: Brain) (b: Brain) : Brain =
     let pick w1 w2 =
-        if rng.Float() > 0.5 then w1
-        elif rng.Float() > mutationChance then w2
-        elif rng.Float() < 0.5 then w2 - mutationStep
-        else w2 + mutationStep
+        let w = if rng.Float() > 0.5 then w1 else w2
+
+        if rng.Float() > mutationChance then
+            w
+        else
+            // Box-Muller transform. The max keeps log away from 0.
+            let u = max (rng.Float()) 1e-12
+            w + mutationSigma * sqrt (-2.0 * log u) * cos (2.0 * System.Math.PI * rng.Float())
 
     Array.map2 (Array.map2 (Array.map2 pick)) a b

@@ -17,9 +17,17 @@ let tests =
         "snake"
         [ test "a champion replays its exact game" {
               let brain = Brain.random (Rng.Source 7u)
-              let a = Game.state (Evolution.play brain 12345u)
-              let b = Game.state (Evolution.play brain 12345u)
-              Expect.equal (a.Score, a.Turns, a.Body) (b.Score, b.Turns, b.Body) "same brain and seed"
+              Expect.equal (Evolution.trial brain 12345u) (Evolution.trial brain 12345u) "same brain and seed"
+          }
+
+          test "the fruit compass rotates with the snake" {
+              // Facing East at (2,5): fruit at (6,5) is 4 ahead. Right of East is South.
+              let ahead = vision (place [ cell 2 5 ] East (cell 6 5) rng)
+              Expect.equal (ahead.[24], ahead.[25]) (0.4, 0.0) "fruit ahead"
+              let south = vision (place [ cell 2 5 ] East (cell 2 8) rng)
+              Expect.equal (south.[24], south.[25]) (0.0, 0.3) "fruit to the right"
+              let behindLeft = vision (place [ cell 5 5 ] North (cell 3 7) rng)
+              Expect.equal (behindLeft.[24], behindLeft.[25]) (-0.2, -0.2) "fruit behind and left when facing North"
           }
 
           test "ray 0 looks forward and rotates with the snake" {

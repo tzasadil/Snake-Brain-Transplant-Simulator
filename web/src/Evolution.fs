@@ -1,4 +1,4 @@
-/// Population and training loop, ported from Population.fs.
+/// Population and training loop, ported from Population.fs. Fitness adds a turn balance rule the original lacks.
 module SnakeEvo.Evolution
 
 open SnakeEvo.Brain
@@ -16,20 +16,38 @@ type Champion =
       Score: int }
 
 type private Result =
-    { Brain: Brain; Seed: uint32; Score: int }
+    { Brain: Brain
+      Seed: uint32
+      Score: int
+      Fitness: float }
+
+/// The rarer turn side needs this share of turns for full fitness.
+/// Without it every population settles on turning one way only, and the most one-sided stall around score 26.
+let private minTurnShare = 0.25
 
 /// Plays one game to the end. Same brain and seed => same game.
-let play (brain: Brain) seed =
+/// Fitness is the score, scaled down when the snake turns one way more than 3:1.
+/// A penalty, not a hard limit: early in a game one turn is 100% one side, and a snake overridden by the rules never learns.
+let trial (brain: Brain) seed =
     let mutable step = Game.Alive(Game.start seed)
+    let mutable lefts, rights = 0, 0
 
     while (match step with
            | Game.Alive _ -> true
            | _ -> false) do
         let g = Game.state step
-        let output = Array.last (think brain (Game.vision g))
-        step <- Game.step (decide output) g
+        let turn = decide (Array.last (think brain (Game.vision g)))
 
-    step
+        match turn with
+        | Game.TurnLeft -> lefts <- lefts + 1
+        | Game.TurnRight -> rights <- rights + 1
+        | Game.Straight -> ()
+
+        step <- Game.step turn g
+
+    let score = (Game.state step).Score
+    let share = if lefts + rights = 0 then 0.0 else float (min lefts rights) / float (lefts + rights)
+    score, float score * min 1.0 (share / minTurnShare)
 
 /// Trains in slices, so the browser can draw between them.
 type Trainer(seed: uint32) =
@@ -39,8 +57,7 @@ type Trainer(seed: uint32) =
     let results = ResizeArray<Result>()
 
     let finishGeneration () =
-        // Fitness is the score alone, as in the original.
-        let ranked = results.ToArray() |> Array.sortByDescending (fun r -> r.Score)
+        let ranked = results.ToArray() |> Array.sortByDescending (fun r -> r.Fitness)
         // Next(Next n) from the original: biased toward the top of the ranking.
         let parent () = ranked[rng.Int(rng.Int ranked.Length)].Brain
 
@@ -68,14 +85,21 @@ type Trainer(seed: uint32) =
 
     /// Plays games while `hasTime ()` holds. Returns the champions of the generations it finished.
     /// Every game gets a fresh seed, so elites face new fruit and the best score can drop, like the original.
+    /// Fitness averages 2 games to cut the luck of fruit placement. The first game is the one a replay shows.
     member _.Train(hasTime: unit -> bool) =
         let champions = ResizeArray<Champion>()
 
         while hasTime () do
             let brain = brains[results.Count]
             let seed = rng.Seed()
-            let score = (Game.state (play brain seed)).Score
-            results.Add { Brain = brain; Seed = seed; Score = score }
+            let score, fitness = trial brain seed
+            let _, second = trial brain (rng.Seed())
+
+            results.Add
+                { Brain = brain
+                  Seed = seed
+                  Score = score
+                  Fitness = (fitness + second) / 2.0 }
 
             if results.Count = populationSize then
                 champions.Add(finishGeneration ())
