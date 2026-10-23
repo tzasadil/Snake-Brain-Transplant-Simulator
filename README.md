@@ -1,8 +1,8 @@
-# Snake: evolved neural network players
+# Snake Brain Transplant Simulator
 
 A Snake game in F# where a genetic algorithm evolves neural networks that learn to play it. You can play yourself, train a population, or watch the best snake of any past generation.
 
-**[Watch it evolve in your browser](https://tzasadil.github.io/Snake-game-evo-optimizer/)**
+**[Watch it evolve in your browser](https://tzasadil.github.io/Snake-Brain-Transplant-Simulator/)**
 
 ![Generation 1 starves, then generation 74 hunts fruit while its network lights up](docs/demo.gif)
 
