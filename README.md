@@ -13,6 +13,7 @@ A Snake game in F# where a genetic algorithm evolves neural networks that learn 
 - **Brain**: a small multi-layer perceptron, 24 -> 18 -> 3 neurons with ReLU. The 3 outputs are turn left, go straight, and turn right.
 - **Evolution**: 100 snakes play one game each in parallel. The two best survive unchanged (elitism). Fitter snakes are more likely to be picked as parents. Children mix parent weights at random, then mutate a few of them. The browser version mutates with Gaussian noise and averages 2 games per snake, with the score cut when the snake turns one way more than 3:1.
 - **Browser**: the same rules, compiled to JavaScript with Fable. Training runs in a Web Worker. The page replays each generation's best game and shows which neurons drive each move.
+- **Fruit fly mode** (browser): a real fly brain circuit plays instead of the network. A script extracts 196 neurons and 4,616 synapse bundles from the male fruit fly connectome: the strongest paths from visual projection neurons to the steering neurons DNa01 and DNa02. Wiring, signs, and synapse counts stay fixed. Evolution tunes only how the snake's senses feed the visual neurons, plus a gain and threshold per neuron, as in [ChessFly](https://huggingface.co/mlabonne/chessfly). The snake turns toward the side whose steering neurons fire more. It learns slowly, from 0.1 fruit per game to about 5 by generation 60.
 - **Desktop GUI**: WPF in strict MVVM. `PropertyChanged.Fody` injects `INotifyPropertyChanged`, so the view models stay plain F#.
 
 ## What I learned
@@ -40,6 +41,7 @@ Needs the .NET 10 SDK and Node.js with pnpm.
 
 | Control | Action |
 |---|---|
+| `Brain` | Neural net or fruit fly. Switching restarts training. |
 | Score chart | Replay the best game of that generation. Arrow keys work too. |
 | `Pause` / `Resume` | Stop or continue training. It also pauses every 300 generations. |
 | `Follow latest` | Each new champion takes over the game in progress |
@@ -76,6 +78,9 @@ Windows only (.NET Framework 4.8, WPF).
 | `web/src/Game.fs` | Browser port of the rules and vision, as pure functions |
 | `web/src/Brain.fs` | Browser port of the network, crossover, and mutation |
 | `web/src/Evolution.fs` | Browser port of selection and the training loop |
+| `web/src/Fly.fs` | Fruit fly circuit: wiring, neuron dynamics, steering readout, and genome |
+| `web/src/Mind.fs` | Either brain behind one interface |
+| `web/tools/extract_fly.py` | Builds `web/public/fly-circuit.json` from the connectome download |
 | `web/src/Worker.fs` | Trains off the main thread |
 | `web/src/View.fs` | Draws the board, the network, and the score chart |
 | `web/src/App.fs` | Replay loop and page controls |
@@ -83,3 +88,7 @@ Windows only (.NET Framework 4.8, WPF).
 [Architecture diagram](https://drive.google.com/file/d/1WRbTG-MDYLCUJCyy3G-27LuXoD9cK_V1/view?usp=sharing)
 
 Built at Charles University.
+
+## Credits
+
+Fruit fly mode uses the Male CNS v1.0 connectome by FlyEM at HHMI Janelia, the University of Cambridge, the MRC Laboratory of Molecular Biology, and Google Research, licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Source: [male-cns.janelia.org](https://male-cns.janelia.org). `web/public/fly-circuit.json` is a subset of it.

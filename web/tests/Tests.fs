@@ -17,7 +17,8 @@ let tests =
         "snake"
         [ test "a champion replays its exact game" {
               let brain = Brain.random (Rng.Source 7u)
-              Expect.equal (Evolution.trial brain 12345u) (Evolution.trial brain 12345u) "same brain and seed"
+              let mind = Mind.Net brain
+              Expect.equal (Evolution.trial mind 12345u) (Evolution.trial mind 12345u) "same brain and seed"
           }
 
           test "the fruit compass rotates with the snake" {
@@ -55,6 +56,32 @@ let tests =
               match step TurnRight g with
               | Dead(HitSelf, _) -> ()
               | other -> failtestf "expected HitSelf, got %A" other
+          }
+
+          test "the fly turns toward its more active steering neurons" {
+              // Two steering neurons, one per side, each driven by its own input neuron.
+              let neurons =
+                  [| "in", "L", "input", 0.0, 0.0
+                     "in", "R", "input", 1.0, 0.0
+                     "DNa02", "L", "output", 0.0, 1.0
+                     "DNa02", "R", "output", 1.0, 1.0 |]
+
+              let circuit =
+                  match Fly.build neurons [| 0; 1 |] [| 2, 1.0 |] [| 3, 1.0 |] [| 0.0; 2.0; 1.0; 1.0; 3.0; 1.0 |] [||] with
+                  | Ok c -> c
+                  | Error e -> failtest e
+
+              let genome (left: float) (right: float) : Fly.Genome =
+                  // Snake input 0 drives the input neurons with the given strengths. Gain 1, no threshold.
+                  { Encoder = Array.init Game.inputCount (fun i -> if i = 0 then [| left; right |] else [| 0.0; 0.0 |])
+                    Gain = Array.zeroCreate 4
+                    Threshold = Array.zeroCreate 4 }
+
+              let input = Array.init Game.inputCount (fun i -> if i = 0 then 1.0 else 0.0)
+              let turn l r = Fly.decide circuit (Fly.think circuit (genome l r) input)
+              Expect.equal (turn 1.0 0.0) TurnLeft "left side more active"
+              Expect.equal (turn 0.0 1.0) TurnRight "right side more active"
+              Expect.equal (turn 1.0 1.0) Straight "a tie goes straight"
           }
 
           test "the snake starves without fruit" {

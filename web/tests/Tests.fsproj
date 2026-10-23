@@ -10,6 +10,8 @@
     <Compile Include="../src/Rng.fs" />
     <Compile Include="../src/Game.fs" />
     <Compile Include="../src/Brain.fs" />
+    <Compile Include="../src/Fly.fs" />
+    <Compile Include="../src/Mind.fs" />
     <Compile Include="../src/Evolution.fs" />
     <Compile Include="Tests.fs" />
   </ItemGroup>

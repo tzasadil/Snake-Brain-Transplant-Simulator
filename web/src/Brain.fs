@@ -53,19 +53,19 @@ let decide (output: float[]) =
 
     [| TurnLeft; Straight; TurnRight |][best]
 
-/// Takes each weight from a random parent, then mutates 10% of weights by Gaussian noise (sigma 0.2).
+/// One gene of a child: taken from a random parent, then with probability `chance` moved by Gaussian noise (sigma 0.2).
 /// The original nudged weights by a fixed 0.02, and only those taken from the second parent
 /// (operator precedence in AI.fs). Against initial weights in (-1, 1) that step barely moved anything,
 /// so evolution only reshuffled the random start and could not learn to use new inputs.
+let inheritGene (rng: Source) chance w1 w2 =
+    let w = if rng.Float() > 0.5 then w1 else w2
+
+    if rng.Float() > chance then
+        w
+    else
+        // Box-Muller transform. The max keeps log away from 0.
+        let u = max (rng.Float()) 1e-12
+        w + mutationSigma * sqrt (-2.0 * log u) * cos (2.0 * System.Math.PI * rng.Float())
+
 let crossover (rng: Source) (a: Brain) (b: Brain) : Brain =
-    let pick w1 w2 =
-        let w = if rng.Float() > 0.5 then w1 else w2
-
-        if rng.Float() > mutationChance then
-            w
-        else
-            // Box-Muller transform. The max keeps log away from 0.
-            let u = max (rng.Float()) 1e-12
-            w + mutationSigma * sqrt (-2.0 * log u) * cos (2.0 * System.Math.PI * rng.Float())
-
-    Array.map2 (Array.map2 (Array.map2 pick)) a b
+    Array.map2 (Array.map2 (Array.map2 (inheritGene rng mutationChance))) a b

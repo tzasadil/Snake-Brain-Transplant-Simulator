@@ -11,17 +11,24 @@ open SnakeEvo.Protocol
 [<Emit("performance.now()")>]
 let private now () : float = jsNative
 
-/// The two Worker members this page uses. Saves a dependency on Fable.Browser.Worker.
+/// The Worker members this page uses. Saves a dependency on Fable.Browser.Worker.
 type private TrainingWorker =
     abstract postMessage: Order -> unit
     abstract onmessage: ({| data: Report |} -> unit) with get, set
+    abstract onerror: (obj -> unit) with get, set
+
+[<Emit("fetch($0).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })")>]
+let private fetchText (url: string) : JS.Promise<string> = jsNative
+
+/// Resolves against the page, so the file is found under any GitHub Pages subpath.
+[<Emit("new URL($0, document.baseURI).href")>]
+let private pageUrl (path: string) : string = jsNative
 
 /// Vite bundles a worker only when it finds this exact `new Worker(new URL(..))` form in the source.
 [<Emit("new Worker(new URL('./Worker.js', import.meta.url), { type: 'module' })")>]
 let private startWorker () : TrainingWorker = jsNative
 
-/// Training pauses every this many generations, so an idle tab stops burning CPU.
-/// Scores plateau around generation 100 to 150 in local runs.
+/// Training pauses every this many generations, so an idle tab stops burning CPU. Resume continues.
 let private pauseEvery = 300
 
 /// Pause after a replay ends, so the death is visible.
@@ -30,6 +37,18 @@ let private endHoldMs = 1200.0
 type private Training =
     | Running
     | Paused
+    /// The worker threw. Restart sends a fresh order.
+    | Failed
+
+type private FlyData =
+    | Loading
+    /// The raw text goes to the worker, the parsed circuit stays here for replays.
+    | Ready of text: string * Fly.Circuit
+    | Unavailable
+
+type private Species =
+    | NetSpecies
+    | FlySpecies
 
 /// Which champion plays next.
 type private Pick =
@@ -44,10 +63,10 @@ type private Finish =
     | Filled
 
 type private Replay =
-    { Champion: Champion
+    { Champion: Champion<Mind.Mind>
       Game: Game
-      /// Activations for the current position, which decide the next move.
-      Acts: float[][] }
+      /// What the brain computed for the current position. It decides the next move.
+      Thought: Mind.Thought }
 
 type private Show =
     | Waiting
@@ -64,41 +83,46 @@ let private trainButton = element "train" :?> HTMLButtonElement
 let private followBox = element "follow" :?> HTMLInputElement
 let private speedSelect = element "speed" :?> HTMLSelectElement
 let private restartButton = element "restart" :?> HTMLButtonElement
+let private brainSelect = element "brain" :?> HTMLSelectElement
+let private flyOption = element "fly-option"
+
+let private show' (el: HTMLElement) visible =
+    if visible then el.removeAttribute "hidden" else el.setAttribute ("hidden", "")
 
 let private newSeed () = uint32 (JS.Math.random () * 4294967296.0)
 
 let private worker = startWorker ()
 let mutable private run = 0
-let private champions = ResizeArray<Champion>()
+let private champions = ResizeArray<Champion<Mind.Mind>>()
 let mutable private training = Running
 let mutable private nextPause = pauseEvery
 let mutable private pick = Intro
 let mutable private show = Waiting
 let mutable private lastMove = 0.0
+let mutable private flyData = Loading
+let mutable private species = NetSpecies
+
+let private circuit () =
+    match flyData with
+    | Ready(_, c) -> Some c
+    | Loading
+    | Unavailable -> None
 
 let private moveMs () = 160.0 / float speedSelect.value
 
-let private begin' (c: Champion) =
+let private begin' (c: Champion<Mind.Mind>) =
     let g = Game.start c.Seed
 
     Playing
         { Champion = c
           Game = g
-          Acts = Brain.think c.Brain (vision g) }
+          Thought = Mind.think c.Brain (vision g) }
 
-/// Hands the game in progress to another champion's network.
-let private swap (c: Champion) (r: Replay) =
+/// Hands the game in progress to another champion's brain.
+let private swap (c: Champion<Mind.Mind>) (r: Replay) =
     { r with
         Champion = c
-        Acts = Brain.think c.Brain (vision r.Game) }
-
-let private chosen (r: Replay) = Brain.decide (Array.last r.Acts)
-
-let private choiceIndex =
-    function
-    | TurnLeft -> 0
-    | Straight -> 1
-    | TurnRight -> 2
+        Thought = Mind.think c.Brain (vision r.Game) }
 
 let private nextChampion () =
     match pick with
@@ -118,8 +142,8 @@ let private advance t =
         lastMove <- t
 
         show <-
-            match step (chosen r) r.Game with
-            | Alive g -> Playing { r with Game = g; Acts = Brain.think r.Champion.Brain (vision g) }
+            match step r.Thought.Turn r.Game with
+            | Alive g -> Playing { r with Game = g; Thought = Mind.think r.Champion.Brain (vision g) }
             | Dead(death, _) -> Ended(r, Died death, t)
             | Won g -> Ended({ r with Game = g }, Filled, t)
     | Ended(_, _, at) when t - at >= endHoldMs ->
@@ -151,18 +175,19 @@ let private render () =
 
     match replay with
     | Some r ->
-        View.board boardCanvas r.Game r.Acts[0]
-        View.network networkCanvas r.Champion.Brain r.Acts (choiceIndex (chosen r))
+        View.board boardCanvas r.Game r.Thought.Input
+        View.thought networkCanvas r.Thought
         setText (element "generation") (string r.Champion.Generation)
         setText (element "score") (string r.Game.Score)
     | None -> ()
 
     setText
         (element "outcome")
-        (match show with
-         | Ended(_, finish, _) -> finishLabel finish
-         | Playing _ -> "Playing"
-         | Waiting -> "Training")
+        (match training, show with
+         | Failed, _ -> "Training failed"
+         | _, Ended(_, finish, _) -> finishLabel finish
+         | _, Playing _ -> "Playing"
+         | _, Waiting -> "Training")
 
     setText (element "trained") (string champions.Count)
 
@@ -175,13 +200,18 @@ let private render () =
         trainButton
         (match training with
          | Running -> "Pause"
-         | Paused -> "Resume")
+         | Paused
+         | Failed -> "Resume")
 
 let private send () =
     let order: Order =
         {| Run = run
            Seed = newSeed ()
-           Running = (training = Running) |}
+           Running = (training = Running)
+           FlyCircuit =
+            match species, flyData with
+            | FlySpecies, Ready(text, _) -> Some text
+            | _ -> None |}
 
     worker.postMessage order
 
@@ -191,17 +221,24 @@ worker.onmessage <-
 
         // Reports from a replaced population can still be in flight after Restart.
         if r.Run = run then
-            let c = champion r
-            champions.Add c
+            match champion (circuit ()) r with
+            | Some c ->
+                champions.Add c
 
-            match pick, show with
-            | Latest, Playing replay -> show <- Playing(swap c replay)
-            | _ -> ()
+                match pick, show with
+                | Latest, Playing replay -> show <- Playing(swap c replay)
+                | _ -> ()
+            | None -> console.error ("Dropped a fruit fly report: circuit not loaded")
 
             if champions.Count >= nextPause && training = Running then
                 training <- Paused
                 nextPause <- champions.Count + pauseEvery
                 send ()
+
+worker.onerror <-
+    fun error ->
+        console.error ("Training worker failed", error)
+        training <- Failed
 
 let rec private frame (t: float) =
     advance t
@@ -221,7 +258,8 @@ trainButton.onclick <-
         training <-
             match training with
             | Running -> Paused
-            | Paused -> Running
+            | Paused
+            | Failed -> Running
 
         send ()
 
@@ -239,16 +277,46 @@ followBox.onchange <-
             | Ended(r, _, _) -> pick <- Fixed r.Champion.Generation
             | Waiting -> ()
 
-restartButton.onclick <-
+/// A new population of the current species. Reports from the old run are dropped by run number.
+let private restart () =
+    run <- run + 1
+    champions.Clear()
+    training <- Running
+    nextPause <- pauseEvery
+    pick <- Intro
+    followBox.``checked`` <- true
+    show <- Waiting
+    send ()
+
+restartButton.onclick <- fun _ -> restart ()
+
+brainSelect.onchange <-
     fun _ ->
-        run <- run + 1
-        champions.Clear()
-        training <- Running
-        nextPause <- pauseEvery
-        pick <- Intro
-        followBox.``checked`` <- true
-        show <- Waiting
-        send ()
+        species <-
+            match brainSelect.value, flyData with
+            | "fly", Ready _ -> FlySpecies
+            | _ -> NetSpecies
+
+        show' (element "legend-net") (species = NetSpecies)
+        show' (element "legend-fly") (species = FlySpecies)
+        restart ()
+
+let private flyFailed (reason: string) =
+    flyData <- Unavailable
+    flyOption.textContent <- "Fruit fly (unavailable)"
+    console.error ($"Fruit fly circuit unavailable: {reason}")
+
+(fetchText (pageUrl "fly-circuit.json"))
+    .``then``(
+        (fun text ->
+            match parseCircuit text with
+            | Ok c ->
+                flyData <- Ready(text, c)
+                flyOption.removeAttribute "disabled"
+            | Error message -> flyFailed message),
+        (fun error -> flyFailed (string error))
+    )
+|> ignore
 
 chartCanvas.onclick <-
     fun e ->

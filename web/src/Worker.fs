@@ -21,9 +21,25 @@ let private soon (work: unit -> unit) : unit = jsNative
 /// Training time between checks for new orders. Long enough that the ~4 ms setTimeout clamp costs little.
 let private sliceMs = 100.0
 
+/// Trains for one slice and returns the reports. Hides the species, so one session type serves both.
+type private Train = (unit -> bool) -> Report list
+
 type private Session =
     | Idle
-    | Active of run: int * Trainer * running: bool
+    | Active of run: int * Train * running: bool
+
+let private start (order: Order) : Train =
+    match order.FlyCircuit with
+    | None ->
+        let trainer = Trainer(order.Seed, net)
+        fun hasTime -> trainer.Train hasTime |> List.map (reportNet order.Run)
+    | Some text ->
+        match parseCircuit text with
+        | Ok circuit ->
+            let trainer = Trainer(order.Seed, fly circuit)
+            fun hasTime -> trainer.Train hasTime |> List.map (reportFly order.Run)
+        // The page parsed this exact text before sending it. Throwing fires the worker's error event on the page.
+        | Error message -> failwith $"fly circuit rejected: {message}"
 
 let mutable private session = Idle
 let mutable private scheduled = false
@@ -32,11 +48,11 @@ let rec private work () =
     scheduled <- false
 
     match session with
-    | Active(run, trainer, true) ->
+    | Active(_, train, true) ->
         let deadline = now () + sliceMs
 
-        for c in trainer.Train(fun () -> now () < deadline) do
-            post (report run c)
+        for report in train (fun () -> now () < deadline) do
+            post report
 
         schedule ()
     | Active(_, _, false)
@@ -50,8 +66,8 @@ and private schedule () =
 onOrder (fun order ->
     session <-
         match session with
-        | Active(run, trainer, _) when run = order.Run -> Active(run, trainer, order.Running)
+        | Active(run, train, _) when run = order.Run -> Active(run, train, order.Running)
         | Active _
-        | Idle -> Active(order.Run, Trainer order.Seed, order.Running)
+        | Idle -> Active(order.Run, start order, order.Running)
 
     schedule ())

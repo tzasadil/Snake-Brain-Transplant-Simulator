@@ -18,6 +18,7 @@ module Color =
     let fruit = "#f87171"
     let positive = "#60a5fa"
     let negative = "#fb923c"
+    let input = "#facc15"
 
 /// Ray labels in vision order, as seen by the snake with forward = up.
 let private rayLabels = [| "↑"; "↗"; "→"; "↘"; "↓"; "↙"; "←"; "↖" |]
@@ -180,11 +181,115 @@ let network (canvas: HTMLCanvasElement) (brain: Brain.Brain) (acts: float[][]) (
         ctx.fillStyle <- !^(if i = choice then Color.text else Color.muted)
         ctx.fillText (label, columns[2] + 14.0, evenY 3 i))
 
+/// The fly circuit at real soma positions, seen from behind so the fly's left is on the left,
+/// over a faint cloud of sampled brain neurons that outlines the brain.
+/// Edges show only while they carry signal, so the active path stands out of 4,600 synapse bundles.
+let fly (canvas: HTMLCanvasElement) (c: Fly.Circuit) (h: float[]) (turn: Turn) =
+    let ctx, w, hgt = fit canvas
+    let top = 30.0
+    let size = min (w - 24.0) (hgt - top - 12.0)
+    let ox = (w - size) / 2.0
+    // Positions span 0 to 1 across the brain's width, but less in height, so center what is there.
+    let lowest = c.Neurons |> Array.fold (fun m n -> max m n.Y) 0.0
+    let oy = top + max 0.0 ((hgt - top - 12.0 - lowest * size) / 2.0)
+    let px x = ox + x * size
+    let py y = oy + y * size
+
+    ctx.fillStyle <- !^Color.grid
+
+    for k in 0 .. c.Cloud.Length / 2 - 1 do
+        ctx.fillRect (px c.Cloud[2 * k] - 1.0, py c.Cloud[2 * k + 1] - 1.0, 2.0, 2.0)
+
+    let peak = h |> Array.fold max 1e-9
+
+    for j in 0 .. c.Neurons.Length - 1 do
+        for e in c.Start[j] .. c.Start[j + 1] - 1 do
+            let signal = abs (c.Weight[e] * h[c.Pre[e]]) / peak * 4.0
+
+            if signal > 0.05 then
+                let pre = c.Neurons[c.Pre[e]]
+                ctx.strokeStyle <- !^(if c.Weight[e] >= 0.0 then Color.positive else Color.negative)
+                ctx.globalAlpha <- min 0.8 signal
+                ctx.lineWidth <- 0.5 + min 1.5 signal
+                line ctx (px pre.X) (py pre.Y) (px c.Neurons[j].X) (py c.Neurons[j].Y)
+
+    let steering =
+        match turn with
+        | TurnLeft -> "L"
+        | TurnRight -> "R"
+        | Straight -> ""
+
+    c.Neurons
+    |> Array.iteri (fun i n ->
+        let color, radius =
+            match n.Role with
+            | Fly.Input -> Color.input, 3.5
+            | Fly.Inter -> Color.text, 2.5
+            | Fly.Output -> Color.snake, 5.0
+
+        circle ctx (px n.X) (py n.Y) radius
+        ctx.globalAlpha <- 1.0
+        ctx.fillStyle <- !^Color.panel
+        ctx.fill ()
+        ctx.globalAlpha <- 0.15 + 0.85 * (h[i] / peak)
+        ctx.fillStyle <- !^color
+        ctx.fill ()
+
+        if n.Role = Fly.Output && n.Side = steering then
+            ctx.globalAlpha <- 1.0
+            ctx.strokeStyle <- !^Color.snake
+            ctx.lineWidth <- 2.0
+            circle ctx (px n.X) (py n.Y) (radius + 3.0)
+            ctx.stroke ())
+
+    ctx.globalAlpha <- 1.0
+    ctx.font <- "11px system-ui, sans-serif"
+    ctx.textBaseline <- "middle"
+    ctx.fillStyle <- !^Color.muted
+
+    // DNa01 and DNa02 somas sit side by side, so each side gets one label.
+    for side in [ "L"; "R" ] do
+        let outputs = c.Neurons |> Array.filter (fun n -> n.Role = Fly.Output && n.Side = side)
+
+        if outputs.Length > 0 then
+            let x = outputs |> Array.averageBy (fun n -> n.X)
+            let y = outputs |> Array.averageBy (fun n -> n.Y)
+            ctx.textAlign <- (if x < 0.5 then "right" else "left")
+            ctx.fillText ($"DNa {side}", px x + (if x < 0.5 then -12.0 else 12.0), py y)
+
+    ctx.font <- "13px system-ui, sans-serif"
+    ctx.textAlign <- "left"
+    ctx.textBaseline <- "top"
+    ctx.fillStyle <- !^Color.muted
+    ctx.fillText ("Turn", 0.0, 4.0)
+    ctx.fillStyle <- !^Color.text
+
+    ctx.fillText (
+        (match turn with
+         | TurnLeft -> "Left"
+         | Straight -> "Straight"
+         | TurnRight -> "Right"),
+        36.0,
+        4.0
+    )
+
+let private choiceIndex =
+    function
+    | TurnLeft -> 0
+    | Straight -> 1
+    | TurnRight -> 2
+
+/// Draws whichever kind of brain produced the thought.
+let thought (canvas: HTMLCanvasElement) (t: Mind.Thought) =
+    match t.Activity with
+    | Mind.Layers(brain, layers) -> network canvas brain layers (choiceIndex t.Turn)
+    | Mind.Neurons(circuit, h) -> fly canvas circuit h t.Turn
+
 /// Generation x position on the chart. Bars keep a minimum width until history outgrows it.
 let private slots count = max count 60
 
 /// Best score per generation. The replayed generation is highlighted.
-let chart (canvas: HTMLCanvasElement) (champions: Champion[]) (current: int option) =
+let chart (canvas: HTMLCanvasElement) (champions: Champion<_>[]) (current: int option) =
     let ctx, w, h = fit canvas
     let plotH = h - 26.0
     let top = champions |> Array.fold (fun m c -> max m c.Score) 0

@@ -10,6 +10,7 @@
   --fruit: #f87171;
   --positive: #60a5fa;
   --negative: #fb923c;
+  --input: #facc15;
   color-scheme: dark;
 }
 
@@ -175,4 +176,12 @@ label {
   align-items: center;
   gap: 8px;
   color: var(--muted);
+}
+
+.legend .credit::before {
+  display: none;
+}
+
+[hidden] {
+  display: none !important;
 }

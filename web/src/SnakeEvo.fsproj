@@ -9,6 +9,8 @@
     <Compile Include="Rng.fs" />
     <Compile Include="Game.fs" />
     <Compile Include="Brain.fs" />
+    <Compile Include="Fly.fs" />
+    <Compile Include="Mind.fs" />
     <Compile Include="Evolution.fs" />
     <Compile Include="Protocol.fs" />
     <Compile Include="Worker.fs" />

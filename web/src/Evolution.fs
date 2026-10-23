@@ -1,22 +1,38 @@
 /// Population and training loop, ported from Population.fs. Fitness adds a turn balance rule the original lacks.
 module SnakeEvo.Evolution
 
-open SnakeEvo.Brain
+open SnakeEvo.Mind
 
 let populationSize = 100
 
 /// The best snakes join the next generation unchanged, so progress is never lost to bad children.
 let private eliteCount = 2
 
-type Champion =
+/// What evolution needs from one kind of brain. A trainer holds one species, so genomes never mix.
+type Species<'G> =
+    { Random: Rng.Source -> 'G
+      Crossover: Rng.Source -> 'G -> 'G -> 'G
+      Mind: 'G -> Mind }
+
+let net =
+    { Random = Brain.random
+      Crossover = Brain.crossover
+      Mind = Net }
+
+let fly circuit =
+    { Random = Fly.random circuit
+      Crossover = Fly.crossover
+      Mind = fun genome -> Fly(circuit, genome) }
+
+type Champion<'G> =
     { Generation: int
-      Brain: Brain
+      Brain: 'G
       /// Replaying the brain with this seed reproduces the exact game that won the generation.
       Seed: uint32
       Score: int }
 
-type private Result =
-    { Brain: Brain
+type private Result<'G> =
+    { Brain: 'G
       Seed: uint32
       Score: int
       Fitness: float }
@@ -28,7 +44,7 @@ let private minTurnShare = 0.25
 /// Plays one game to the end. Same brain and seed => same game.
 /// Fitness is the score, scaled down when the snake turns one way more than 3:1.
 /// A penalty, not a hard limit: early in a game one turn is 100% one side, and a snake overridden by the rules never learns.
-let trial (brain: Brain) seed =
+let trial (mind: Mind) seed =
     let mutable step = Game.Alive(Game.start seed)
     let mutable lefts, rights = 0, 0
 
@@ -36,7 +52,7 @@ let trial (brain: Brain) seed =
            | Game.Alive _ -> true
            | _ -> false) do
         let g = Game.state step
-        let turn = decide (Array.last (think brain (Game.vision g)))
+        let turn = (think mind (Game.vision g)).Turn
 
         match turn with
         | Game.TurnLeft -> lefts <- lefts + 1
@@ -50,11 +66,11 @@ let trial (brain: Brain) seed =
     score, float score * min 1.0 (share / minTurnShare)
 
 /// Trains in slices, so the browser can draw between them.
-type Trainer(seed: uint32) =
+type Trainer<'G>(seed: uint32, species: Species<'G>) =
     let rng = Rng.Source seed
     let mutable generation = 1
-    let mutable brains = Array.init populationSize (fun _ -> random rng)
-    let results = ResizeArray<Result>()
+    let mutable brains = Array.init populationSize (fun _ -> species.Random rng)
+    let results = ResizeArray<Result<'G>>()
 
     let finishGeneration () =
         let ranked = results.ToArray() |> Array.sortByDescending (fun r -> r.Fitness)
@@ -66,7 +82,7 @@ type Trainer(seed: uint32) =
                 if i < eliteCount then
                     ranked[i].Brain
                 else
-                    crossover rng (parent ()) (parent ()))
+                    species.Crossover rng (parent ()) (parent ()))
 
         results.Clear()
         let best = ranked[0]
@@ -87,13 +103,14 @@ type Trainer(seed: uint32) =
     /// Every game gets a fresh seed, so elites face new fruit and the best score can drop, like the original.
     /// Fitness averages 2 games to cut the luck of fruit placement. The first game is the one a replay shows.
     member _.Train(hasTime: unit -> bool) =
-        let champions = ResizeArray<Champion>()
+        let champions = ResizeArray<Champion<'G>>()
 
         while hasTime () do
             let brain = brains[results.Count]
             let seed = rng.Seed()
-            let score, fitness = trial brain seed
-            let _, second = trial brain (rng.Seed())
+            let mind = species.Mind brain
+            let score, fitness = trial mind seed
+            let _, second = trial mind (rng.Seed())
 
             results.Add
                 { Brain = brain
