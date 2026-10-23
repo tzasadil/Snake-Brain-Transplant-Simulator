@@ -10,40 +10,40 @@ open SnakeEvo.Mind
 
 /// Desired worker state, sent whole. Each order is idempotent, so no command can arrive out of context.
 /// A new Run starts a fresh population from Seed.
-/// FlyCircuit holds the circuit JSON in fruit fly mode. The page already loaded and validated it,
-/// so the worker needs no fetch and no error path of its own. About 120 KB, sent only on page actions.
+/// Circuit holds the connectome JSON in fruit fly and worm modes. The page already loaded and validated it,
+/// so the worker needs no fetch and no error path of its own. Up to 100 KB, sent only on page actions.
 type Order =
     {| Run: int
        Seed: uint32
        Running: bool
-       FlyCircuit: string option |}
+       Circuit: string option |}
 
-type FlyGenes =
+type WiredGenes =
     {| Encoder: float[][]
        Gain: float[]
        Threshold: float[] |}
 
 /// One finished generation. Run lets the page drop reports from a population it already replaced.
-/// Exactly one of Net and Fly is set, matching the run's species.
+/// Exactly one of Net and Wired is set, matching the run's species.
 type Report =
     {| Run: int
        Generation: int
        Seed: uint32
        Score: int
        Net: float[][][] option
-       Fly: FlyGenes option |}
+       Wired: WiredGenes option |}
 
-let private report run (c: Champion<_>) net fly : Report =
+let private report run (c: Champion<_>) net wired : Report =
     {| Run = run
        Generation = c.Generation
        Seed = c.Seed
        Score = c.Score
        Net = net
-       Fly = fly |}
+       Wired = wired |}
 
 let reportNet run (c: Champion<Brain.Brain>) = report run c (Some c.Brain) None
 
-let reportFly run (c: Champion<Fly.Genome>) =
+let reportWired run (c: Champion<Connectome.Genome>) =
     report
         run
         c
@@ -53,14 +53,14 @@ let reportFly run (c: Champion<Fly.Genome>) =
                Gain = c.Brain.Gain
                Threshold = c.Brain.Threshold |})
 
-/// None when a fly report arrives without a loaded circuit. The page only starts fly runs after loading it.
-let champion (circuit: Fly.Circuit option) (r: Report) : Champion<Mind> option =
+/// None when a connectome report arrives without a loaded circuit. The page only starts those runs after loading it.
+let champion (circuit: Connectome.Circuit option) (r: Report) : Champion<Mind> option =
     let mind =
-        match r.Net, r.Fly, circuit with
+        match r.Net, r.Wired, circuit with
         | Some brain, _, _ -> Some(Net brain)
         | None, Some genes, Some c ->
             Some(
-                Fly(
+                Wired(
                     c,
                     { Encoder = genes.Encoder
                       Gain = genes.Gain
@@ -76,8 +76,8 @@ let champion (circuit: Fly.Circuit option) (r: Report) : Champion<Mind> option =
           Seed = r.Seed
           Score = r.Score })
 
-/// Parses web/public/fly-circuit.json (see web/tools/extract_fly.py). Shape checks here, index checks in Fly.build.
-let parseCircuit (text: string) : Result<Fly.Circuit, string> =
+/// Parses a circuit file (web/public/*-circuit.json, see web/tools). Shape checks here, index checks in Connectome.build.
+let parseCircuit (text: string) : Result<Connectome.Circuit, string> =
     try
         let raw = JS.JSON.parse text
 
@@ -112,13 +112,15 @@ let parseCircuit (text: string) : Result<Fly.Circuit, string> =
                 | [| x; y |] -> string n?``type``, string n?side, string n?role, x, y
                 | _ -> failwith "neuron position must be x, y")
 
-        Fly.build
-            neurons
-            (numbers raw?inputs |> Array.map int)
-            (pairs raw?left)
-            (pairs raw?right)
-            (numbers raw?edges)
-            (numbers raw?cloud)
-            (if jsTypeof raw?steps = "number" then unbox<int> raw?steps else -1)
+        Connectome.build
+            { Neurons = neurons
+              Inputs = numbers raw?inputs |> Array.map int
+              Left = pairs raw?left
+              Right = pairs raw?right
+              Edges = numbers raw?edges
+              // The fly file has no gap junctions.
+              Gaps = if isNull raw?gaps then [||] else numbers raw?gaps
+              Cloud = numbers raw?cloud
+              Steps = if jsTypeof raw?steps = "number" then unbox<int> raw?steps else -1 }
     with e ->
         Error e.Message

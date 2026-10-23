@@ -14,6 +14,7 @@ A Snake game in F# where a genetic algorithm evolves neural networks that learn 
 - **Evolution**: 100 snakes play one game each in parallel. The two best survive unchanged (elitism). Fitter snakes are more likely to be picked as parents. Children mix parent weights at random, then mutate a few of them. The browser version mutates with Gaussian noise and averages 2 games per snake, with the score cut when the snake turns one way more than 3:1.
 - **Browser**: the same rules, compiled to JavaScript with Fable. Training runs in a Web Worker. The page replays each generation's best game and shows which neurons drive each move.
 - **Fruit fly mode** (browser): a real fly brain circuit plays instead of the network. A script extracts 230 neurons and 2,763 synapse bundles from the male fruit fly connectome. Signal flows forward from visual projection neurons and backward from the steering neurons DNa01 and DNa02, and each neuron scores by how much of both reaches it, over paths of up to 5 hops. Visual neurons wired straight onto steering are left out, so every signal crosses the brain. Wiring, signs, and synapse counts stay fixed. Evolution tunes only how the snake's senses feed the visual neurons, plus a gain and threshold per neuron, as in [ChessFly](https://huggingface.co/mlabonne/chessfly). The snake turns toward the side whose steering neurons fire more. In a short test it reached about 13 fruit per game by generation 60. A random circuit of the same size learned about as well, so the evolved encoder and gains do most of the work, not the fly's wiring.
+- **Worm mode** (browser): the whole nervous system of the roundworm C. elegans plays: 299 neurons, 1,922 chemical synapses, and 1,079 gap junctions. The snake's senses feed 36 head sensory neurons, and the snake turns toward whichever head motor neurons fire more, dorsal (SMDD, RMDD) for left or ventral (SMDV, RMDV) for right, as the worm steers by bending its head. Signs come from each neuron's transmitter: GABA inhibits, acetylcholine and glutamate excite. Evolution tunes the same encoder, gains, and thresholds as in fruit fly mode. In a short test it reached 1 to 18 fruit per game by generation 60, depending on the seed.
 - **Desktop GUI**: WPF in strict MVVM. `PropertyChanged.Fody` injects `INotifyPropertyChanged`, so the view models stay plain F#.
 
 ## What I learned
@@ -41,7 +42,7 @@ Needs the .NET 10 SDK and Node.js with pnpm.
 
 | Control | Action |
 |---|---|
-| `Brain` | Fruit fly (default) or neural net. Switching restarts training. |
+| `Brain` | Fruit fly (default), worm, or neural net. Switching restarts training. |
 | Score chart | Replay the best game of that generation. Arrow keys work too. |
 | `Pause` / `Resume` | Stop or continue training. It also pauses every 300 generations. |
 | `Follow latest` | Each new champion takes over the game in progress |
@@ -78,9 +79,10 @@ Windows only (.NET Framework 4.8, WPF).
 | `web/src/Game.fs` | Browser port of the rules and vision, as pure functions |
 | `web/src/Brain.fs` | Browser port of the network, crossover, and mutation |
 | `web/src/Evolution.fs` | Browser port of selection and the training loop |
-| `web/src/Fly.fs` | Fruit fly circuit: wiring, neuron dynamics, steering readout, and genome |
+| `web/src/Connectome.fs` | Fly and worm circuits: wiring, gap junctions, neuron dynamics, steering readout, and genome |
 | `web/src/Mind.fs` | Either brain behind one interface |
 | `web/tools/extract_fly.py` | Builds `web/public/fly-circuit.json` from the connectome download |
+| `web/tools/extract_worm.py` | Builds `web/public/worm-circuit.json` from OpenWorm data |
 | `web/src/Worker.fs` | Trains off the main thread |
 | `web/src/View.fs` | Draws the board, the network, and the score chart |
 | `web/src/App.fs` | Replay loop and page controls |
@@ -92,3 +94,5 @@ Built at Charles University.
 ## Credits
 
 Fruit fly mode uses the Male CNS v1.0 connectome by FlyEM at HHMI Janelia, the University of Cambridge, the MRC Laboratory of Molecular Biology, and Google Research, licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Source: [male-cns.janelia.org](https://male-cns.janelia.org). `web/public/fly-circuit.json` is a subset of it.
+
+Worm mode uses the C. elegans wiring of Varshney et al. 2011 (PLoS Comput Biol, CC BY), neurotransmitter identities from Wang et al. 2024 (eLife, CC BY), and soma positions from the WormBase Virtual Worm (public domain), all as redistributed by [OpenWorm](https://openworm.org) (MIT).

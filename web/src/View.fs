@@ -19,6 +19,7 @@ module Color =
     let positive = "#60a5fa"
     let negative = "#fb923c"
     let input = "#facc15"
+    let gap = "#c084fc"
 
 /// Ray labels in vision order, as seen by the snake with forward = up.
 let private rayLabels = [| "↑"; "↗"; "→"; "↘"; "↓"; "↙"; "←"; "↖" |]
@@ -181,17 +182,18 @@ let network (canvas: HTMLCanvasElement) (brain: Brain.Brain) (acts: float[][]) (
         ctx.fillStyle <- !^(if i = choice then Color.text else Color.muted)
         ctx.fillText (label, columns[2] + 14.0, evenY 3 i))
 
-/// The fly circuit at real soma positions, seen from behind so the fly's left is on the left,
-/// over a faint cloud of sampled brain neurons that outlines the brain.
-/// Edges show only while they carry signal, so the active path stands out of 4,600 synapse bundles.
-let fly (canvas: HTMLCanvasElement) (c: Fly.Circuit) (h: float[]) (turn: Turn) =
+/// A connectome circuit at real soma positions over a faint outline: the fly brain seen from behind,
+/// so its left is on the left, or the worm from the side, head on the left.
+/// Synapses show only while they carry signal, so the active paths stand out of thousands.
+let connectome (canvas: HTMLCanvasElement) (c: Connectome.Circuit) (h: float[]) (turn: Turn) =
     let ctx, w, hgt = fit canvas
     let top = 30.0
     let size = min (w - 24.0) (hgt - top - 12.0)
     let ox = (w - size) / 2.0
-    // Positions span 0 to 1 across the brain's width, but less in height, so center what is there.
-    let lowest = c.Neurons |> Array.fold (fun m n -> max m n.Y) 0.0
-    let oy = top + max 0.0 ((hgt - top - 12.0 - lowest * size) / 2.0)
+    // Positions span 0 to 1 across, but less in height, so the drawing centers what is there.
+    let ys = Array.append (c.Neurons |> Array.map (fun n -> n.Y)) (Array.init (c.Cloud.Length / 2) (fun k -> c.Cloud[2 * k + 1]))
+    let low, high = Array.min ys, Array.max ys
+    let oy = top + (hgt - top - 12.0 - (high - low) * size) / 2.0 - low * size
     let px x = ox + x * size
     let py y = oy + y * size
 
@@ -213,19 +215,29 @@ let fly (canvas: HTMLCanvasElement) (c: Fly.Circuit) (h: float[]) (turn: Turn) =
                 ctx.lineWidth <- 0.5 + min 1.5 signal
                 line ctx (px pre.X) (py pre.Y) (px c.Neurons[j].X) (py c.Neurons[j].Y)
 
+        for e in c.GapStart[j] .. c.GapStart[j + 1] - 1 do
+            let peer = c.GapPeer[e]
+            let signal = abs (c.GapWeight[e] * h[peer]) / peak * 4.0
+
+            if signal > 0.05 then
+                ctx.strokeStyle <- !^Color.gap
+                ctx.globalAlpha <- min 0.8 signal
+                ctx.lineWidth <- 0.5 + min 1.5 signal
+                line ctx (px c.Neurons[peer].X) (py c.Neurons[peer].Y) (px c.Neurons[j].X) (py c.Neurons[j].Y)
+
     let steering =
         match turn with
-        | TurnLeft -> "L"
-        | TurnRight -> "R"
-        | Straight -> ""
+        | TurnLeft -> c.Left |> Array.map fst
+        | TurnRight -> c.Right |> Array.map fst
+        | Straight -> [||]
 
     c.Neurons
     |> Array.iteri (fun i n ->
         let color, radius =
             match n.Role with
-            | Fly.Input -> Color.input, 3.5
-            | Fly.Inter -> Color.text, 2.5
-            | Fly.Output -> Color.snake, 5.0
+            | Connectome.Input -> Color.input, 3.5
+            | Connectome.Inter -> Color.text, 2.5
+            | Connectome.Output -> Color.snake, 5.0
 
         circle ctx (px n.X) (py n.Y) radius
         ctx.globalAlpha <- 1.0
@@ -235,7 +247,7 @@ let fly (canvas: HTMLCanvasElement) (c: Fly.Circuit) (h: float[]) (turn: Turn) =
         ctx.fillStyle <- !^color
         ctx.fill ()
 
-        if n.Role = Fly.Output && n.Side = steering then
+        if Array.contains i steering then
             ctx.globalAlpha <- 1.0
             ctx.strokeStyle <- !^Color.snake
             ctx.lineWidth <- 2.0
@@ -269,7 +281,7 @@ let private choiceIndex =
 let thought (canvas: HTMLCanvasElement) (t: Mind.Thought) =
     match t.Activity with
     | Mind.Layers(brain, layers) -> network canvas brain layers (choiceIndex t.Turn)
-    | Mind.Neurons(circuit, h) -> fly canvas circuit h t.Turn
+    | Mind.Neurons(circuit, h) -> connectome canvas circuit h t.Turn
 
 /// Generation x position on the chart. Bars keep a minimum width until history outgrows it.
 let private slots count = max count 60

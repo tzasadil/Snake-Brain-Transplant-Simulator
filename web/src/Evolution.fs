@@ -19,10 +19,10 @@ let net =
       Crossover = Brain.crossover
       Mind = Net }
 
-let fly circuit =
-    { Random = Fly.random circuit
-      Crossover = Fly.crossover
-      Mind = fun genome -> Fly(circuit, genome) }
+let connectome circuit =
+    { Random = Connectome.random circuit
+      Crossover = Connectome.crossover
+      Mind = fun genome -> Wired(circuit, genome) }
 
 type Champion<'G> =
     { Generation: int

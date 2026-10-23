@@ -40,15 +40,28 @@ type private Training =
     /// The worker threw. Restart sends a fresh order.
     | Failed
 
-type private FlyData =
+type private CircuitData =
     | Loading
     /// The raw text goes to the worker, the parsed circuit stays here for replays.
-    | Ready of text: string * Fly.Circuit
+    | Ready of text: string * Connectome.Circuit
     | Unavailable
+
+/// Brains wired by a real connectome. Each loads its circuit file after the page.
+type private Kind =
+    | Fly
+    | Worm
 
 type private Species =
     | NetSpecies
-    | FlySpecies
+    | WiredSpecies of Kind
+
+/// Dropdown value, circuit file, and legend element of each wired kind.
+let private info =
+    function
+    | Fly -> {| Value = "fly"; File = "fly-circuit.json"; Name = "Fruit fly"; Legend = "legend-fly" |}
+    | Worm -> {| Value = "worm"; File = "worm-circuit.json"; Name = "Worm"; Legend = "legend-worm" |}
+
+let private kinds = [ Fly; Worm ]
 
 /// Which champion plays next.
 type private Pick =
@@ -84,7 +97,7 @@ let private followBox = element "follow" :?> HTMLInputElement
 let private speedSelect = element "speed" :?> HTMLSelectElement
 let private restartButton = element "restart" :?> HTMLButtonElement
 let private brainSelect = element "brain" :?> HTMLSelectElement
-let private flyOption = element "fly-option"
+let private option kind = element $"{(info kind).Value}-option"
 
 let private show' (el: HTMLElement) visible =
     if visible then el.removeAttribute "hidden" else el.setAttribute ("hidden", "")
@@ -101,15 +114,18 @@ let mutable private show = Waiting
 let mutable private lastMove = 0.0
 /// Generation under the mouse on the chart.
 let mutable private hovered: int option = None
-let mutable private flyData = Loading
+let mutable private circuits = kinds |> List.map (fun k -> k, Loading) |> Map.ofList
 /// Fruit fly is the default. Its circuit loads after the page, so the first run starts once it arrives.
-let mutable private species = FlySpecies
+let mutable private species = WiredSpecies Fly
 
 let private circuit () =
-    match flyData with
-    | Ready(_, c) -> Some c
-    | Loading
-    | Unavailable -> None
+    match species with
+    | WiredSpecies k ->
+        match circuits[k] with
+        | Ready(_, c) -> Some c
+        | Loading
+        | Unavailable -> None
+    | NetSpecies -> None
 
 let private moveMs () = 160.0 / float speedSelect.value
 
@@ -223,13 +239,16 @@ let private send () =
         {| Run = run
            Seed = newSeed ()
            Running = (training = Running)
-           FlyCircuit = circuit |}
+           Circuit = circuit |}
 
-    match species, flyData with
-    | NetSpecies, _ -> worker.postMessage (order None)
-    | FlySpecies, Ready(text, _) -> worker.postMessage (order (Some text))
-    // The circuit is still loading, and its arrival starts the run. Sending now would train the wrong species.
-    | FlySpecies, (Loading | Unavailable) -> ()
+    match species with
+    | NetSpecies -> worker.postMessage (order None)
+    | WiredSpecies k ->
+        match circuits[k] with
+        | Ready(text, _) -> worker.postMessage (order (Some text))
+        // The circuit is still loading, and its arrival starts the run. Sending now would train the wrong species.
+        | Loading
+        | Unavailable -> ()
 
 worker.onmessage <-
     fun e ->
@@ -244,7 +263,7 @@ worker.onmessage <-
                 match pick, show with
                 | Latest, Playing replay -> show <- Playing(swap c replay)
                 | _ -> ()
-            | None -> console.error ("Dropped a fruit fly report: circuit not loaded")
+            | None -> console.error ("Dropped a report: circuit not loaded")
 
             if champions.Count >= nextPause && training = Running then
                 training <- Paused
@@ -308,36 +327,51 @@ restartButton.onclick <- fun _ -> restart ()
 
 let private choose newSpecies =
     species <- newSpecies
-    brainSelect.value <- (if newSpecies = FlySpecies then "fly" else "net")
+
+    brainSelect.value <-
+        match newSpecies with
+        | NetSpecies -> "net"
+        | WiredSpecies k -> (info k).Value
+
     show' (element "legend-net") (newSpecies = NetSpecies)
-    show' (element "legend-fly") (newSpecies = FlySpecies)
+
+    for k in kinds do
+        show' (element (info k).Legend) (newSpecies = WiredSpecies k)
+
     restart ()
 
-brainSelect.onchange <- fun _ -> choose (if brainSelect.value = "fly" then FlySpecies else NetSpecies)
+brainSelect.onchange <-
+    fun _ ->
+        choose (
+            match kinds |> List.tryFind (fun k -> (info k).Value = brainSelect.value) with
+            | Some k -> WiredSpecies k
+            | None -> NetSpecies
+        )
 
-/// Without the circuit the page falls back to the network, so it still works.
-let private flyFailed (reason: string) =
-    flyData <- Unavailable
-    flyOption.setAttribute ("disabled", "")
-    flyOption.textContent <- "Fruit fly (unavailable)"
-    console.error ($"Fruit fly circuit unavailable: {reason}")
+/// Without its circuit a kind is disabled, and the page falls back to the network, so it still works.
+let private unavailable kind (reason: string) =
+    circuits <- circuits.Add(kind, Unavailable)
+    (option kind).setAttribute ("disabled", "")
+    (option kind).textContent <- $"{(info kind).Name} (unavailable)"
+    console.error ($"{(info kind).Name} circuit unavailable: {reason}")
 
-    if species = FlySpecies then
+    if species = WiredSpecies kind then
         choose NetSpecies
 
-(fetchText (pageUrl "fly-circuit.json"))
-    .``then``(
-        (fun text ->
-            match parseCircuit text with
-            | Ok c ->
-                flyData <- Ready(text, c)
+for kind in kinds do
+    (fetchText (pageUrl (info kind).File))
+        .``then``(
+            (fun text ->
+                match parseCircuit text with
+                | Ok c ->
+                    circuits <- circuits.Add(kind, Ready(text, c))
 
-                if species = FlySpecies then
-                    restart ()
-            | Error message -> flyFailed message),
-        (fun error -> flyFailed (string error))
-    )
-|> ignore
+                    if species = WiredSpecies kind then
+                        restart ()
+                | Error message -> unavailable kind message),
+            (fun error -> unavailable kind (string error))
+        )
+    |> ignore
 
 chartCanvas.onclick <-
     fun e ->

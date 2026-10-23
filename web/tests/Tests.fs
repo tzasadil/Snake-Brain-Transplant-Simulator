@@ -58,30 +58,67 @@ let tests =
               | other -> failtestf "expected HitSelf, got %A" other
           }
 
-          test "the fly turns toward its more active steering neurons" {
+          test "a circuit turns toward its more active steering neurons" {
               // Two steering neurons, one per side, each driven by its own input neuron.
-              let neurons =
-                  [| "in", "L", "input", 0.0, 0.0
-                     "in", "R", "input", 1.0, 0.0
-                     "DNa02", "L", "output", 0.0, 1.0
-                     "DNa02", "R", "output", 1.0, 1.0 |]
-
               let circuit =
-                  match Fly.build neurons [| 0; 1 |] [| 2, 1.0 |] [| 3, 1.0 |] [| 0.0; 2.0; 1.0; 1.0; 3.0; 1.0 |] [||] 2 with
+                  match
+                      Connectome.build
+                          { Neurons =
+                              [| "in", "L", "input", 0.0, 0.0
+                                 "in", "R", "input", 1.0, 0.0
+                                 "DNa02", "L", "output", 0.0, 1.0
+                                 "DNa02", "R", "output", 1.0, 1.0 |]
+                            Inputs = [| 0; 1 |]
+                            Left = [| 2, 1.0 |]
+                            Right = [| 3, 1.0 |]
+                            Edges = [| 0.0; 2.0; 1.0; 1.0; 3.0; 1.0 |]
+                            Gaps = [||]
+                            Cloud = [||]
+                            Steps = 2 }
+                  with
                   | Ok c -> c
                   | Error e -> failtest e
 
-              let genome (left: float) (right: float) : Fly.Genome =
+              let genome (left: float) (right: float) : Connectome.Genome =
                   // Snake input 0 drives the input neurons with the given strengths. Gain 1, no threshold.
                   { Encoder = Array.init Game.inputCount (fun i -> if i = 0 then [| left; right |] else [| 0.0; 0.0 |])
                     Gain = Array.zeroCreate 4
                     Threshold = Array.zeroCreate 4 }
 
               let input = Array.init Game.inputCount (fun i -> if i = 0 then 1.0 else 0.0)
-              let turn l r = Fly.decide circuit (Fly.think circuit (genome l r) input)
+              let turn l r = Connectome.decide circuit (Connectome.think circuit (genome l r) input)
               Expect.equal (turn 1.0 0.0) TurnLeft "left side more active"
               Expect.equal (turn 0.0 1.0) TurnRight "right side more active"
               Expect.equal (turn 1.0 1.0) Straight "a tie goes straight"
+          }
+
+          test "a gap junction carries activity to a silent partner" {
+              // Input 0 drives neuron 0. Neuron 1 has no synapse, only a gap junction to neuron 0.
+              let circuit gaps =
+                  match
+                      Connectome.build
+                          { Neurons = [| "in", "", "input", 0.0, 0.0; "a", "", "output", 0.0, 0.0; "b", "", "output", 1.0, 0.0 |]
+                            Inputs = [| 0 |]
+                            Left = [| 1, 1.0 |]
+                            Right = [| 2, 1.0 |]
+                            Edges = [||]
+                            Gaps = gaps
+                            Cloud = [||]
+                            Steps = 2 }
+                  with
+                  | Ok c -> c
+                  | Error e -> failtest e
+
+              let genome: Connectome.Genome =
+                  { Encoder = Array.init Game.inputCount (fun i -> if i = 0 then [| 1.0 |] else [| 0.0 |])
+                    Gain = Array.zeroCreate 3
+                    Threshold = Array.zeroCreate 3 }
+
+              let input = Array.init Game.inputCount (fun i -> if i = 0 then 1.0 else 0.0)
+              let coupled = Connectome.think (circuit [| 0.0; 1.0; 0.5; 1.0; 0.0; 0.5 |]) genome input
+              let alone = Connectome.think (circuit [||]) genome input
+              Expect.isGreaterThan coupled[1] 0.0 "coupled neuron picks up activity"
+              Expect.equal alone[1] 0.0 "without the gap junction it stays silent"
           }
 
           test "the snake starves without fruit" {

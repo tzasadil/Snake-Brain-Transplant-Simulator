@@ -29,17 +29,17 @@ type private Session =
     | Active of run: int * Train * running: bool
 
 let private start (order: Order) : Train =
-    match order.FlyCircuit with
+    match order.Circuit with
     | None ->
         let trainer = Trainer(order.Seed, net)
         fun hasTime -> trainer.Train hasTime |> List.map (reportNet order.Run)
     | Some text ->
         match parseCircuit text with
         | Ok circuit ->
-            let trainer = Trainer(order.Seed, fly circuit)
-            fun hasTime -> trainer.Train hasTime |> List.map (reportFly order.Run)
+            let trainer = Trainer(order.Seed, connectome circuit)
+            fun hasTime -> trainer.Train hasTime |> List.map (reportWired order.Run)
         // The page parsed this exact text before sending it. Throwing fires the worker's error event on the page.
-        | Error message -> failwith $"fly circuit rejected: {message}"
+        | Error message -> failwith $"circuit rejected: {message}"
 
 let mutable private session = Idle
 let mutable private scheduled = false
