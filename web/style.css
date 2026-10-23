@@ -185,3 +185,14 @@ label {
 [hidden] {
   display: none !important;
 }
+
+/* Overlays the brain canvas corner. Both brain views keep their top right free. */
+.brain {
+  position: relative;
+}
+
+.brain-picker {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+}

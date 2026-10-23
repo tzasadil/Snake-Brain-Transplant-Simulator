@@ -26,7 +26,13 @@
           </dl>
         </figure>
 
-        <figure class="panel">
+        <figure class="panel brain">
+          <label class="brain-picker">Brain
+            <select id="brain">
+              <option value="fly" id="fly-option" selected>Fruit fly</option>
+              <option value="net">Neural net</option>
+            </select>
+          </label>
           <canvas id="network" class="network" role="img"
             aria-label="Snake brain, lit by activity"></canvas>
           <ul class="legend" id="legend-net" hidden>
@@ -56,12 +62,6 @@
             <div><dt>Latest score</dt><dd id="latest">–</dd></div>
             <div><dt>Best score</dt><dd id="best">–</dd></div>
           </dl>
-          <label>Brain
-            <select id="brain">
-              <option value="fly" id="fly-option" selected>Fruit fly</option>
-              <option value="net">Neural net</option>
-            </select>
-          </label>
           <button id="train" type="button">Pause</button>
           <label><input id="follow" type="checkbox" checked /> Follow latest</label>
           <label>Speed
