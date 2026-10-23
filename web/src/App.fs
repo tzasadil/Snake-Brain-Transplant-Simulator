@@ -33,6 +33,9 @@ type private Training =
 
 /// Which champion plays next.
 type private Pick =
+    /// Generation 1 plays to the end first, so every visitor sees it fail before the swaps begin.
+    | Intro
+    /// Each new champion takes over the game in progress.
     | Latest
     | Fixed of generation: int
 
@@ -69,7 +72,7 @@ let mutable private run = 0
 let private champions = ResizeArray<Champion>()
 let mutable private training = Running
 let mutable private nextPause = pauseEvery
-let mutable private pick = Latest
+let mutable private pick = Intro
 let mutable private show = Waiting
 let mutable private lastMove = 0.0
 
@@ -83,6 +86,12 @@ let private begin' (c: Champion) =
           Game = g
           Acts = Brain.think c.Brain (vision g) }
 
+/// Hands the game in progress to another champion's network.
+let private swap (c: Champion) (r: Replay) =
+    { r with
+        Champion = c
+        Acts = Brain.think c.Brain (vision r.Game) }
+
 let private chosen (r: Replay) = Brain.decide (Array.last r.Acts)
 
 let private choiceIndex =
@@ -92,11 +101,10 @@ let private choiceIndex =
     | TurnRight -> 2
 
 let private nextChampion () =
-    match show, pick with
-    // Every visitor first sees generation 1 crash, for contrast with what follows.
-    | Waiting, _ -> Seq.tryHead champions
-    | _, Latest -> Seq.tryLast champions
-    | _, Fixed gen -> Some champions[gen - 1]
+    match pick with
+    | Intro -> Seq.tryHead champions
+    | Latest -> Seq.tryLast champions
+    | Fixed gen -> Some champions[gen - 1]
 
 let private advance t =
     match show with
@@ -115,6 +123,9 @@ let private advance t =
             | Dead(death, _) -> Ended(r, Died death, t)
             | Won g -> Ended({ r with Game = g }, Filled, t)
     | Ended(_, _, at) when t - at >= endHoldMs ->
+        if pick = Intro then
+            pick <- Latest
+
         nextChampion () |> Option.iter (fun c -> show <- begin' c)
         lastMove <- t
     | Playing _
@@ -180,7 +191,12 @@ worker.onmessage <-
 
         // Reports from a replaced population can still be in flight after Restart.
         if r.Run = run then
-            champions.Add(champion r)
+            let c = champion r
+            champions.Add c
+
+            match pick, show with
+            | Latest, Playing replay -> show <- Playing(swap c replay)
+            | _ -> ()
 
             if champions.Count >= nextPause && training = Running then
                 training <- Paused
@@ -213,7 +229,10 @@ followBox.onchange <-
     fun _ ->
         if followBox.``checked`` then
             pick <- Latest
-            Seq.tryLast champions |> Option.iter (fun c -> show <- begin' c)
+
+            match show, Seq.tryLast champions with
+            | Playing r, Some c -> show <- Playing(swap c r)
+            | _ -> ()
         else
             match show with
             | Playing r
@@ -226,7 +245,7 @@ restartButton.onclick <-
         champions.Clear()
         training <- Running
         nextPause <- pauseEvery
-        pick <- Latest
+        pick <- Intro
         followBox.``checked`` <- true
         show <- Waiting
         send ()
