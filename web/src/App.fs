@@ -52,9 +52,9 @@ type private Species =
 
 /// Which champion plays next.
 type private Pick =
-    /// Generation 1 plays to the end first, so every visitor sees it fail before the swaps begin.
-    | Intro
-    /// Each new champion takes over the game in progress.
+    /// Each new champion takes over the game in progress, from the first generation on.
+    /// An earlier intro played generation 1 to its death first, but a fly's first brain
+    /// can circle for many seconds while newer generations queue up unseen.
     | Latest
     | Fixed of generation: int
 
@@ -96,7 +96,7 @@ let mutable private run = 0
 let private champions = ResizeArray<Champion<Mind.Mind>>()
 let mutable private training = Running
 let mutable private nextPause = pauseEvery
-let mutable private pick = Intro
+let mutable private pick = Latest
 let mutable private show = Waiting
 let mutable private lastMove = 0.0
 /// Generation under the mouse on the chart.
@@ -129,7 +129,6 @@ let private swap (c: Champion<Mind.Mind>) (r: Replay) =
 
 let private nextChampion () =
     match pick with
-    | Intro -> Seq.tryHead champions
     | Latest -> Seq.tryLast champions
     | Fixed gen -> Some champions[gen - 1]
 
@@ -150,9 +149,6 @@ let private advance t =
             | Dead(death, _) -> Ended(r, Died death, t)
             | Won g -> Ended({ r with Game = g }, Filled, t)
     | Ended(_, _, at) when t - at >= endHoldMs ->
-        if pick = Intro then
-            pick <- Latest
-
         nextChampion () |> Option.iter (fun c -> show <- begin' c)
         lastMove <- t
     | Playing _
@@ -303,7 +299,7 @@ let private restart () =
     champions.Clear()
     training <- Running
     nextPause <- pauseEvery
-    pick <- Intro
+    pick <- Latest
     followBox.``checked`` <- true
     show <- Waiting
     send ()

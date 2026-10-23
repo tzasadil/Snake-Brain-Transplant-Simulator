@@ -274,7 +274,7 @@ let thought (canvas: HTMLCanvasElement) (t: Mind.Thought) =
 /// Generation x position on the chart. Bars keep a minimum width until history outgrows it.
 let private slots count = max count 60
 
-/// Best score per generation. The replayed generation is highlighted, the hovered one brightened and labeled.
+/// Best score per generation, unlabeled. The replayed generation is highlighted, the hovered one brightened and labeled.
 let chart (canvas: HTMLCanvasElement) (champions: Champion<_>[]) (current: int option) (hovered: int option) =
     let ctx, w, h = fit canvas
     let plotH = h - 26.0
@@ -296,14 +296,12 @@ let chart (canvas: HTMLCanvasElement) (champions: Champion<_>[]) (current: int o
         ctx.fillRect (float i * barW, h - 4.0 - barH, max 1.0 (barW - 1.0), barH))
 
     ctx.globalAlpha <- 1.0
-    ctx.font <- "12px system-ui, sans-serif"
-    ctx.textBaseline <- "top"
-    ctx.textAlign <- "left"
-    ctx.fillStyle <- !^Color.muted
-    ctx.fillText ("Best score per generation", 0.0, 2.0)
 
+    // The top strip stays free for this label, so it never covers a bar.
     match hovered |> Option.filter (fun g -> g >= 1 && g <= champions.Length) with
     | Some g ->
+        ctx.font <- "12px system-ui, sans-serif"
+        ctx.textBaseline <- "top"
         ctx.textAlign <- "right"
         ctx.fillStyle <- !^Color.text
         ctx.fillText ($"Gen {g} · score {champions[g - 1].Score}", w, 2.0)
