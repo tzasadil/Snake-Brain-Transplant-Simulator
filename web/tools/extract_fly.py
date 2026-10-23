@@ -7,7 +7,7 @@ Download the three flat-connectome files from https://male-cns.janelia.org/downl
   connectome-weights-male-cns-v1.0-minconf-0.5.feather   (1.1 GB, 152M rows)
 
 Run:
-  uv run --no-project --with pyarrow --with pandas --with scipy python -I web/tools/extract_fly.py <data dir> web/public/fly-circuit.json
+  uv run --no-project --with pyarrow --with pandas --with scipy python -I web/tools/extract_fly.py <data dir> web/data/fly-circuit.json
 
 The full brain (166k neurons) is far too large to download and evolve in a browser, so this keeps the
 neurons that carry the most signal from vision to steering. Signal flows forward from the visual projection

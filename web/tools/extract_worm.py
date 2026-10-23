@@ -10,7 +10,7 @@ Data, all redistributed by OpenWorm:
 
 Run:
   uv run --no-project --with pandas --with xlrd --with openpyxl python -I web/tools/extract_worm.py \
-    <CElegansNeuronTables.xls> <elife-95402-supp2-v1.xlsx> <cell.nml dir> web/public/worm-circuit.json
+    <CElegansNeuronTables.xls> <elife-95402-supp2-v1.xlsx> <cell.nml dir> web/data/worm-circuit.json
 
 Unlike the fruit fly, the worm is small enough to keep every neuron and every connection.
 """

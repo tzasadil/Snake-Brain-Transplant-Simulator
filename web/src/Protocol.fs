@@ -76,7 +76,7 @@ let champion (circuit: Connectome.Circuit option) (r: Report) : Champion<Mind> o
           Seed = r.Seed
           Score = r.Score })
 
-/// Parses a circuit file (web/public/*-circuit.json, see web/tools). Shape checks here, index checks in Connectome.build.
+/// Parses a circuit file (web/data/*-circuit.json, see web/tools). Shape checks here, index checks in Connectome.build.
 let parseCircuit (text: string) : Result<Connectome.Circuit, string> =
     try
         let raw = JS.JSON.parse text
@@ -121,6 +121,14 @@ let parseCircuit (text: string) : Result<Connectome.Circuit, string> =
               // The fly file has no gap junctions.
               Gaps = if isNull raw?gaps then [||] else numbers raw?gaps
               Cloud = numbers raw?cloud
-              Steps = if jsTypeof raw?steps = "number" then unbox<int> raw?steps else -1 }
+              Steps = if jsTypeof raw?steps = "number" then unbox<int> raw?steps else -1
+              Seed =
+                if isNull raw?seed then
+                    None
+                else
+                    Some
+                        { Encoder = list raw?seed?encoder |> Array.map numbers
+                          Gain = numbers raw?seed?gain
+                          Threshold = numbers raw?seed?threshold } }
     with e ->
         Error e.Message

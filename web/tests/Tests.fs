@@ -74,7 +74,8 @@ let tests =
                             Edges = [| 0.0; 2.0; 1.0; 1.0; 3.0; 1.0 |]
                             Gaps = [||]
                             Cloud = [||]
-                            Steps = 2 }
+                            Steps = 2
+                            Seed = None }
                   with
                   | Ok c -> c
                   | Error e -> failtest e
@@ -104,7 +105,8 @@ let tests =
                             Edges = [||]
                             Gaps = gaps
                             Cloud = [||]
-                            Steps = 2 }
+                            Steps = 2
+                            Seed = None }
                   with
                   | Ok c -> c
                   | Error e -> failtest e

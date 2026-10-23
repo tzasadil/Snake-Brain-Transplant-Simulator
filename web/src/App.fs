@@ -20,9 +20,14 @@ type private TrainingWorker =
 [<Emit("fetch($0).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })")>]
 let private fetchText (url: string) : JS.Promise<string> = jsNative
 
-/// Resolves against the page, so the file is found under any GitHub Pages subpath.
-[<Emit("new URL($0, document.baseURI).href")>]
-let private pageUrl (path: string) : string = jsNative
+// Vite fingerprints a file it finds in this exact `new URL('..', import.meta.url)` form, so each deploy
+// gets a new file name. Plain fetches of fixed names let browsers mix a cached old circuit file with new code,
+// which the parser then rejects. The paths are relative to the compiled build/App.js.
+[<Emit("new URL('../data/fly-circuit.json', import.meta.url).href")>]
+let private flyUrl () : string = jsNative
+
+[<Emit("new URL('../data/worm-circuit.json', import.meta.url).href")>]
+let private wormUrl () : string = jsNative
 
 /// Vite bundles a worker only when it finds this exact `new Worker(new URL(..))` form in the source.
 [<Emit("new Worker(new URL('./Worker.js', import.meta.url), { type: 'module' })")>]
@@ -58,8 +63,8 @@ type private Species =
 /// Dropdown value, circuit file, and legend element of each wired kind.
 let private info =
     function
-    | Fly -> {| Value = "fly"; File = "fly-circuit.json"; Name = "Fruit fly"; Legend = "legend-fly" |}
-    | Worm -> {| Value = "worm"; File = "worm-circuit.json"; Name = "Worm"; Legend = "legend-worm" |}
+    | Fly -> {| Value = "fly"; Url = flyUrl; Name = "Fruit fly"; Legend = "legend-fly" |}
+    | Worm -> {| Value = "worm"; Url = wormUrl; Name = "Worm"; Legend = "legend-worm" |}
 
 let private kinds = [ Fly; Worm ]
 
@@ -143,15 +148,29 @@ let private swap (c: Champion<Mind.Mind>) (r: Replay) =
         Champion = c
         Thought = Mind.think c.Brain (vision r.Game) }
 
+/// The pretrained seed as generation 0. Good snakes play long games, so a seeded first generation takes
+/// seconds to train, and the board would sit empty meanwhile. It is never added to the chart.
+let private seedChampion () : Champion<Mind.Mind> option =
+    circuit ()
+    |> Option.bind (fun c ->
+        c.Seed
+        |> Option.map (fun genome ->
+            { Generation = 0
+              Brain = Mind.Wired(c, genome)
+              Seed = newSeed ()
+              Score = 0 }))
+
 let private nextChampion () =
     match pick with
     | Latest -> Seq.tryLast champions
-    | Fixed gen -> Some champions[gen - 1]
+    | Fixed gen when gen >= 1 && gen <= champions.Count -> Some champions[gen - 1]
+    // Generation 0 is the seed, which has no slot in the list.
+    | Fixed _ -> seedChampion ()
 
 let private advance t =
     match show with
     | Waiting ->
-        match nextChampion () with
+        match nextChampion () |> Option.orElse (seedChampion ()) with
         | Some c ->
             show <- begin' c
             lastMove <- t
@@ -165,7 +184,7 @@ let private advance t =
             | Dead(death, _) -> Ended(r, Died death, t)
             | Won g -> Ended({ r with Game = g }, Filled, t)
     | Ended(_, _, at) when t - at >= endHoldMs ->
-        nextChampion () |> Option.iter (fun c -> show <- begin' c)
+        nextChampion () |> Option.orElse (seedChampion ()) |> Option.iter (fun c -> show <- begin' c)
         lastMove <- t
     | Playing _
     | Ended _ -> ()
@@ -222,7 +241,7 @@ let private render () =
     chartCanvas.setAttribute ("aria-valuemax", string (max 1 champions.Count))
 
     match current with
-    | Some g when g <= champions.Count ->
+    | Some g when g >= 1 && g <= champions.Count ->
         chartCanvas.setAttribute ("aria-valuenow", string g)
         chartCanvas.setAttribute ("aria-valuetext", $"Generation {g}, score {champions[g - 1].Score}")
     | _ -> ()
@@ -359,7 +378,7 @@ let private unavailable kind (reason: string) =
         choose NetSpecies
 
 for kind in kinds do
-    (fetchText (pageUrl (info kind).File))
+    (fetchText ((info kind).Url ()))
         .``then``(
             (fun text ->
                 match parseCircuit text with
