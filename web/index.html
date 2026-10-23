@@ -29,14 +29,14 @@
         <figure class="panel">
           <canvas id="network" class="network" role="img"
             aria-label="Snake brain, lit by activity"></canvas>
-          <ul class="legend" id="legend-net">
+          <ul class="legend" id="legend-net" hidden>
             <li style="--swatch: var(--wall)">Wall</li>
             <li style="--swatch: var(--snake)">Body</li>
             <li style="--swatch: var(--fruit)">Fruit</li>
             <li style="--swatch: var(--positive)">Weight +</li>
             <li style="--swatch: var(--negative)">Weight −</li>
           </ul>
-          <ul class="legend" id="legend-fly" hidden>
+          <ul class="legend" id="legend-fly">
             <li style="--swatch: var(--input)">Visual input</li>
             <li style="--swatch: var(--text)">Interneuron</li>
             <li style="--swatch: var(--snake)">Steering</li>
@@ -52,12 +52,14 @@
           aria-valuemin="1" aria-valuemax="1" aria-valuenow="1"></canvas>
         <div class="controls">
           <dl class="stats">
-            <div><dt>Trained</dt><dd id="trained">0</dd></div>
+            <div><dt>Generation</dt><dd id="trained">0</dd></div>
+            <div><dt>Latest score</dt><dd id="latest">–</dd></div>
+            <div><dt>Best score</dt><dd id="best">–</dd></div>
           </dl>
           <label>Brain
             <select id="brain">
+              <option value="fly" id="fly-option" selected>Fruit fly</option>
               <option value="net">Neural net</option>
-              <option value="fly" id="fly-option" disabled>Fruit fly</option>
             </select>
           </label>
           <button id="train" type="button">Pause</button>

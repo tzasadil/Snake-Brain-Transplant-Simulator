@@ -99,8 +99,11 @@ let mutable private nextPause = pauseEvery
 let mutable private pick = Intro
 let mutable private show = Waiting
 let mutable private lastMove = 0.0
+/// Generation under the mouse on the chart.
+let mutable private hovered: int option = None
 let mutable private flyData = Loading
-let mutable private species = NetSpecies
+/// Fruit fly is the default. Its circuit loads after the page, so the first run starts once it arrives.
+let mutable private species = FlySpecies
 
 let private circuit () =
     match flyData with
@@ -191,10 +194,26 @@ let private render () =
 
     setText (element "trained") (string champions.Count)
 
+    setText
+        (element "latest")
+        (match Seq.tryLast champions with
+         | Some c -> string c.Score
+         | None -> "–")
+
+    setText
+        (element "best")
+        (if champions.Count = 0 then "–"
+         else string (champions |> Seq.map (fun c -> c.Score) |> Seq.max))
+
     let current = replay |> Option.map (fun r -> r.Champion.Generation)
-    View.chart chartCanvas (champions.ToArray()) current
+    View.chart chartCanvas (champions.ToArray()) current hovered
     chartCanvas.setAttribute ("aria-valuemax", string (max 1 champions.Count))
-    current |> Option.iter (fun g -> chartCanvas.setAttribute ("aria-valuenow", string g))
+
+    match current with
+    | Some g when g <= champions.Count ->
+        chartCanvas.setAttribute ("aria-valuenow", string g)
+        chartCanvas.setAttribute ("aria-valuetext", $"Generation {g}, score {champions[g - 1].Score}")
+    | _ -> ()
 
     setText
         trainButton
@@ -204,16 +223,17 @@ let private render () =
          | Failed -> "Resume")
 
 let private send () =
-    let order: Order =
+    let order (circuit: string option) : Order =
         {| Run = run
            Seed = newSeed ()
            Running = (training = Running)
-           FlyCircuit =
-            match species, flyData with
-            | FlySpecies, Ready(text, _) -> Some text
-            | _ -> None |}
+           FlyCircuit = circuit |}
 
-    worker.postMessage order
+    match species, flyData with
+    | NetSpecies, _ -> worker.postMessage (order None)
+    | FlySpecies, Ready(text, _) -> worker.postMessage (order (Some text))
+    // The circuit is still loading, and its arrival starts the run. Sending now would train the wrong species.
+    | FlySpecies, (Loading | Unavailable) -> ()
 
 worker.onmessage <-
     fun e ->
@@ -290,21 +310,24 @@ let private restart () =
 
 restartButton.onclick <- fun _ -> restart ()
 
-brainSelect.onchange <-
-    fun _ ->
-        species <-
-            match brainSelect.value, flyData with
-            | "fly", Ready _ -> FlySpecies
-            | _ -> NetSpecies
+let private choose newSpecies =
+    species <- newSpecies
+    brainSelect.value <- (if newSpecies = FlySpecies then "fly" else "net")
+    show' (element "legend-net") (newSpecies = NetSpecies)
+    show' (element "legend-fly") (newSpecies = FlySpecies)
+    restart ()
 
-        show' (element "legend-net") (species = NetSpecies)
-        show' (element "legend-fly") (species = FlySpecies)
-        restart ()
+brainSelect.onchange <- fun _ -> choose (if brainSelect.value = "fly" then FlySpecies else NetSpecies)
 
+/// Without the circuit the page falls back to the network, so it still works.
 let private flyFailed (reason: string) =
     flyData <- Unavailable
+    flyOption.setAttribute ("disabled", "")
     flyOption.textContent <- "Fruit fly (unavailable)"
     console.error ($"Fruit fly circuit unavailable: {reason}")
+
+    if species = FlySpecies then
+        choose NetSpecies
 
 (fetchText (pageUrl "fly-circuit.json"))
     .``then``(
@@ -312,7 +335,9 @@ let private flyFailed (reason: string) =
             match parseCircuit text with
             | Ok c ->
                 flyData <- Ready(text, c)
-                flyOption.removeAttribute "disabled"
+
+                if species = FlySpecies then
+                    restart ()
             | Error message -> flyFailed message),
         (fun error -> flyFailed (string error))
     )
@@ -322,6 +347,9 @@ chartCanvas.onclick <-
     fun e ->
         View.generationAt chartCanvas champions.Count e.offsetX
         |> Option.iter select
+
+chartCanvas.onmousemove <- fun e -> hovered <- View.generationAt chartCanvas champions.Count e.offsetX
+chartCanvas.onmouseleave <- fun _ -> hovered <- None
 
 chartCanvas.onkeydown <-
     fun e ->

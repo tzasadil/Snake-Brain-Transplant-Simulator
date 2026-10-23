@@ -41,7 +41,7 @@ Needs the .NET 10 SDK and Node.js with pnpm.
 
 | Control | Action |
 |---|---|
-| `Brain` | Neural net or fruit fly. Switching restarts training. |
+| `Brain` | Fruit fly (default) or neural net. Switching restarts training. |
 | Score chart | Replay the best game of that generation. Arrow keys work too. |
 | `Pause` / `Resume` | Stop or continue training. It also pauses every 300 generations. |
 | `Follow latest` | Each new champion takes over the game in progress |

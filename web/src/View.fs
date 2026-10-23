@@ -243,20 +243,6 @@ let fly (canvas: HTMLCanvasElement) (c: Fly.Circuit) (h: float[]) (turn: Turn) =
             ctx.stroke ())
 
     ctx.globalAlpha <- 1.0
-    ctx.font <- "11px system-ui, sans-serif"
-    ctx.textBaseline <- "middle"
-    ctx.fillStyle <- !^Color.muted
-
-    // DNa01 and DNa02 somas sit side by side, so each side gets one label.
-    for side in [ "L"; "R" ] do
-        let outputs = c.Neurons |> Array.filter (fun n -> n.Role = Fly.Output && n.Side = side)
-
-        if outputs.Length > 0 then
-            let x = outputs |> Array.averageBy (fun n -> n.X)
-            let y = outputs |> Array.averageBy (fun n -> n.Y)
-            ctx.textAlign <- (if x < 0.5 then "right" else "left")
-            ctx.fillText ($"DNa {side}", px x + (if x < 0.5 then -12.0 else 12.0), py y)
-
     ctx.font <- "13px system-ui, sans-serif"
     ctx.textAlign <- "left"
     ctx.textBaseline <- "top"
@@ -288,8 +274,8 @@ let thought (canvas: HTMLCanvasElement) (t: Mind.Thought) =
 /// Generation x position on the chart. Bars keep a minimum width until history outgrows it.
 let private slots count = max count 60
 
-/// Best score per generation. The replayed generation is highlighted.
-let chart (canvas: HTMLCanvasElement) (champions: Champion<_>[]) (current: int option) =
+/// Best score per generation. The replayed generation is highlighted, the hovered one brightened and labeled.
+let chart (canvas: HTMLCanvasElement) (champions: Champion<_>[]) (current: int option) (hovered: int option) =
     let ctx, w, h = fit canvas
     let plotH = h - 26.0
     let top = champions |> Array.fold (fun m c -> max m c.Score) 0
@@ -302,7 +288,11 @@ let chart (canvas: HTMLCanvasElement) (champions: Champion<_>[]) (current: int o
         let barH = max 1.0 (float c.Score / float best * plotH)
         let isCurrent = current = Some c.Generation
         ctx.fillStyle <- !^(if isCurrent then Color.head else Color.snake)
-        ctx.globalAlpha <- (if isCurrent then 1.0 else 0.45)
+
+        ctx.globalAlpha <-
+            if isCurrent || hovered = Some c.Generation then 1.0
+            else 0.45
+
         ctx.fillRect (float i * barW, h - 4.0 - barH, max 1.0 (barW - 1.0), barH))
 
     ctx.globalAlpha <- 1.0
@@ -310,7 +300,14 @@ let chart (canvas: HTMLCanvasElement) (champions: Champion<_>[]) (current: int o
     ctx.textBaseline <- "top"
     ctx.textAlign <- "left"
     ctx.fillStyle <- !^Color.muted
-    ctx.fillText ($"Best score per generation · top {top}", 0.0, 2.0)
+    ctx.fillText ("Best score per generation", 0.0, 2.0)
+
+    match hovered |> Option.filter (fun g -> g >= 1 && g <= champions.Length) with
+    | Some g ->
+        ctx.textAlign <- "right"
+        ctx.fillStyle <- !^Color.text
+        ctx.fillText ($"Gen {g} · score {champions[g - 1].Score}", w, 2.0)
+    | None -> ()
 
 /// Generation under a click at x, if any.
 let generationAt (canvas: HTMLCanvasElement) (count: int) (x: float) =
