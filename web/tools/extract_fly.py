@@ -23,12 +23,16 @@ import numpy as np
 import pyarrow.dataset as ds
 import pyarrow.feather as feather
 import scipy.sparse as sp
+import scipy.sparse.csgraph as csgraph
 
 data_dir, out_path = sys.argv[1], sys.argv[2]
 
 # Sizes keep the circuit small enough to evolve 200 games per generation in a browser.
-INTERNEURONS_PER_SIDE = 130
+MAX_NEURONS = 250
+MAX_PATHS = 200
 INPUTS_PER_SIDE = 16
+# Each pick divides its connections' strength by this, so later picks favor fresh routes.
+PATH_PENALTY = 4
 # Each neuron keeps only its strongest inputs, which bounds the work per update step.
 MAX_INPUTS_PER_NEURON = 16
 # Paths longer than this barely carry signal after normalization, and each hop costs an update step.
@@ -93,38 +97,61 @@ types = eligible["type"].to_numpy()
 is_output = np.isin(types, list(OUTPUTS))
 output_ids = list(ids[is_output])
 assert len(output_ids) == 4, f"expected DNa01 and DNa02 on both sides, got {len(output_ids)}"
-
-# Backward flow from the steering neurons: back[j][x] = signal x sends to steering over exactly j hops.
-back = [is_output.astype(float)]
-for _ in range(MAX_HOPS):
-    back.append(backward @ back[-1])
-
 is_vpn = superclass == "visual_projection"
 # Visual neurons wired straight onto steering are excluded as inputs, so signals must cross the brain.
 direct = np.asarray((A[:, is_output] > 0).sum(axis=1)).ravel() > 0
 
-selected, inputs = [], []
-for side in ["L", "R"]:
-    sources = is_vpn & (somaside == side) & ~direct
-    flow = sum(back[j] for j in range(2, MAX_HOPS + 1))
-    side_inputs = [ids[i] for i in np.argsort(-(flow * sources))[:INPUTS_PER_SIDE]]
-    inputs += side_inputs
-    start = np.isin(ids, side_inputs).astype(float)
-    # Forward flow from this side's inputs: fwd[i][x] = signal reaching x over exactly i hops.
-    fwd = [start]
-    for _ in range(MAX_HOPS):
-        fwd.append(forward.T @ fwd[-1])
-    # A neuron's score sums every path split: i hops from vision, then j hops to steering, i + j <= MAX_HOPS.
-    score = sum(fwd[i] * back[j] for i in range(1, MAX_HOPS) for j in range(1, MAX_HOPS - i + 1))
-    score[is_output | is_vpn] = 0
-    selected += [ids[i] for i in np.argsort(-score)[:INTERNEURONS_PER_SIDE] if score[i] > 0]
+# Paths, not scores: an earlier version scored neurons by signal flow through the whole brain and kept the top
+# ones. Many of the paths they sat on ran through neurons it dropped, so inside the small circuit they got
+# little signal. Here whole paths are kept. A connection's strength is its share of the receiving neuron's
+# input. A path's strength is the product along it, so the strongest path is the shortest under -log(share).
+# After each pick, the path's connections are weakened, so the next search finds a different route.
+share = backward.tocoo()
+cost = sp.csr_matrix((-np.log(share.data), (share.col, share.row)), shape=(n, n))  # reversed: post -> pre
+cost.data = np.maximum(cost.data, 1e-9)  # a sole input has share 1 and cost 0, which the search drops
+targets = np.flatnonzero(is_output)
 
-inters = [b for b in dict.fromkeys(selected) if b not in inputs and b not in output_ids]
+nodes, inputs, path_edges, path_lengths = set(output_ids), {"L": [], "R": []}, set(), []
+for _ in range(MAX_PATHS):
+    dist, pred = csgraph.dijkstra(cost, indices=targets, min_only=True, return_predecessors=True)[:2]
+    for side in ["L", "R"]:
+        chosen = inputs[side]
+        if len(chosen) < INPUTS_PER_SIDE:
+            candidates = np.flatnonzero(is_vpn & (somaside == side) & ~direct)
+        else:
+            candidates = np.array([pos_of[b] for b in chosen])
+        candidates = candidates[np.isfinite(dist[candidates])]
+        start = candidates[np.argmin(dist[candidates])]
+        path = [start]
+        while path[-1] not in targets:
+            path.append(pred[path[-1]])
+        if len(path) - 1 > MAX_HOPS:
+            continue
+        if ids[start] not in chosen:
+            chosen.append(ids[start])
+        path_lengths.append(len(path) - 1)
+        for a, b in zip(path, path[1:]):
+            nodes.update([ids[a], ids[b]])
+            path_edges.add((ids[a], ids[b]))
+            # Weaken the used connection (reversed matrix: row b, column a).
+            row = slice(cost.indptr[b], cost.indptr[b + 1])
+            hit = np.flatnonzero(cost.indices[row] == a)
+            cost.data[cost.indptr[b] + hit] += np.log(PATH_PENALTY)
+    if len(nodes) >= MAX_NEURONS:
+        break
+
+inputs = inputs["L"] + inputs["R"]
+selected = [b for b in nodes if b not in inputs and b not in output_ids]
+
+inters = sorted(selected)
 circuit = inputs + inters + output_ids
 index = {body: i for i, body in enumerate(circuit)}
 
 edges = edges[edges["body_pre"].isin(index) & edges["body_post"].isin(index)]
-edges = edges.sort_values("weight", ascending=False).groupby("body_post").head(MAX_INPUTS_PER_NEURON)
+is_path_edge = [(a, b) in path_edges for a, b in zip(edges["body_pre"], edges["body_post"])]
+strongest = edges.sort_values("weight", ascending=False).groupby("body_post").head(MAX_INPUTS_PER_NEURON)
+# Pruning keeps each neuron's strongest inputs, and always the connections of the chosen paths.
+edges = edges[is_path_edge | edges.index.isin(strongest.index)]
 # Normalize each neuron's input within the subcircuit, so activity stays bounded whatever its size.
 total_in = edges.groupby("body_post")["weight"].sum()
 flat_edges = []
@@ -215,4 +242,5 @@ result = {
 with open(out_path, "w") as f:
     json.dump(result, f, separators=(",", ":"))
 
-print(f"neurons {len(circuit)} edges {len(flat_edges) // 3} inputs {len(inputs)} steps {steps} steering hops {output_hops} -> {out_path}")
+print(f"neurons {len(circuit)} edges {len(flat_edges) // 3} inputs {len(inputs)} paths {len(path_lengths)} "
+      f"path hops {np.bincount(path_lengths).tolist()} steps {steps} -> {out_path}")
