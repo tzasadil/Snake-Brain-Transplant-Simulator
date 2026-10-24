@@ -1,6 +1,6 @@
 # Snake Brain Transplant Simulator
 
-A Snake game in F# with swappable brains: evolved neural networks, real fruit fly and worm circuits, readable rule programs, and brains that learn while they play. Watch any brain learn, or watch the best snake of any past generation.
+A Snake game in F# with swappable brains. Give the snake a brain and watch it learn, or watch the best snake of any past generation.
 
 **[Watch it evolve in your browser](https://tzasadil.github.io/Snake-Brain-Transplant-Simulator/)**
 
@@ -31,8 +31,8 @@ How well each brain learns, with the controls behind each claim: [experiment rep
 | Senses | Inputs |
 |---|---|
 | Distance to wall, own body, and fruit along 8 rays | 24 |
-| Fruit compass: fruit offset ahead and to the right | 2 (browser only) |
-| Snake length | 1 (browser only) |
+| Fruit compass: fruit offset ahead and to the right | 2 |
+| Snake length | 1 |
 
 The rays rotate with the snake, so "left" always means the snake's left.
 
@@ -45,9 +45,9 @@ Used by the fruit fly, worm, neural net, NEAT, and program tree.
 - **Parents**: fitter snakes are more likely to be picked.
 - **Children**: mix their parents' genes at random, then mutate a few.
 
-The browser version adds:
+What keeps it learning:
 
-| Change | Why |
+| Rule | Why |
 |---|---|
 | Gaussian mutation | A fixed step of 0.02 was too weak to tune new inputs |
 | 2 games per snake | Cuts the luck of fruit placement |
@@ -70,9 +70,9 @@ Used by the Q-table and spiking + dopamine.
 | Step away from the fruit | -0.1 |
 | Starve | None: the game ends before the move happens |
 
-## In the browser
+## The page
 
-- **Same rules**: compiled from F# to JavaScript with Fable.
+- **Language**: F#, compiled to JavaScript with Fable.
 - **Training**: runs in a Web Worker, so playback never stutters.
 - **Board**: plays each generation's best snake on a fresh random game.
 - **Brain panel**: shows what drives each move.
@@ -81,7 +81,7 @@ Used by the Q-table and spiking + dopamine.
 
 ### Neural net
 
-- A multi-layer perceptron with ReLU: 24 -> 18 -> 3 neurons, 27 -> 18 -> 3 in the browser.
+- A multi-layer perceptron with ReLU: 27 -> 18 -> 3 neurons.
 - Evolution tunes every weight.
 
 ### NEAT
@@ -175,8 +175,6 @@ No learning, a classic algorithm for comparison.
 
 ## Run
 
-### Browser
-
 Needs the .NET 10 SDK and Node.js with pnpm.
 
 1. Go to `web/`.
@@ -197,37 +195,9 @@ Needs the .NET 10 SDK and Node.js with pnpm.
 | `Restart` | Train a new random population |
 | `New cycle` | Hamiltonian cycle mode only, which does not train: draw a new cycle |
 
-### Desktop
-
-Windows only (.NET Framework 4.8, WPF), in strict MVVM. `PropertyChanged.Fody` injects `INotifyPropertyChanged`, so the view models stay plain F#.
-
-1. Open `snake_Fs.sln` in Visual Studio.
-2. Restore NuGet packages.
-3. Run the project.
-
-| Control | Action |
-|---|---|
-| `Space` | Pause or resume |
-| `W` `A` `S` `D` | Steer the snake in human mode |
-| `Human` / `Bot` | Switch between you and the AI |
-| `Train` | Train the current population, click again to stop |
-| `Save` / `Load` | Store or restore a population as a folder of JSON networks |
-| Training history row | Let the best snake of that generation play, even mid-game |
-
 ## Code map
 
-### Desktop
-
-| File | Role |
-|---|---|
-| `GameManager.fs` | Game loop, collisions, and the 8-ray vision |
-| `AI.fs` | Network, forward pass, crossover, and mutation |
-| `Population.fs` | Parallel evaluation, selection, and the training loop |
-| `Settings.fs` | Grid size, network shape, and mutation rates |
-| `MainWindow.xaml.fs` | View model and commands |
-| `ExampleSnake.fs` | A pretrained snake, noted for its jiggly style |
-
-### Browser, in `web/src/`
+### App, in `web/src/`
 
 | File | Role |
 |---|---|
@@ -255,9 +225,9 @@ Windows only (.NET Framework 4.8, WPF), in strict MVVM. `PropertyChanged.Fody` i
 | `check-page.mjs` | Headless Chrome check: trains a brain, samples stats, screenshots, reports errors |
 | `source-data/` | Raw connectome downloads, gitignored. The extraction scripts list their sources. |
 
-[Architecture diagram](https://drive.google.com/file/d/1WRbTG-MDYLCUJCyy3G-27LuXoD9cK_V1/view?usp=sharing)
+## Legacy desktop app
 
-Built at Charles University.
+The original version, built at Charles University, lives in `desktop/`: a Windows WPF app (.NET Framework 4.8) with the neural net only. It is no longer maintained. Open `desktop/snake_Fs.sln` in Visual Studio to run it. [Architecture diagram](https://drive.google.com/file/d/1WRbTG-MDYLCUJCyy3G-27LuXoD9cK_V1/view?usp=sharing)
 
 ## Credits
 

@@ -1,4 +1,4 @@
-/// Snake rules, ported from GameManager.fs as pure functions. Vision adds 3 inputs the original lacks.
+/// Snake rules, ported from desktop/GameManager.fs as pure functions. Vision adds 3 inputs the original lacks.
 module SnakeEvo.Game
 
 open SnakeEvo.Native

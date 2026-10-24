@@ -1,4 +1,4 @@
-/// Population and training loop, ported from Population.fs. Fitness adds a turn balance rule the original lacks.
+/// Population and training loop, ported from desktop/Population.fs. Fitness adds a turn balance rule the original lacks.
 module SnakeEvo.Evolution
 
 open SnakeEvo.Mind

@@ -1,4 +1,4 @@
-/// The neural network and its genetics, ported from AI.fs.
+/// The neural network and its genetics, ported from desktop/AI.fs.
 module SnakeEvo.Brain
 
 open SnakeEvo.Native
@@ -55,7 +55,7 @@ let decide (output: float[]) =
 
 /// One gene of a child: taken from a random parent, then with probability `chance` moved by Gaussian noise (sigma 0.2).
 /// The original nudged weights by a fixed 0.02, and only those taken from the second parent
-/// (operator precedence in AI.fs). Against initial weights in (-1, 1) that step barely moved anything,
+/// (operator precedence in desktop/AI.fs). Against initial weights in (-1, 1) that step barely moved anything,
 /// so evolution only reshuffled the random start and could not learn to use new inputs.
 let inheritGene (rng: Source) chance w1 w2 =
     let w = if rng.Float() > 0.5 then w1 else w2
