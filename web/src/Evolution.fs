@@ -90,7 +90,10 @@ type Trainer<'G>(seed: uint32, species: Species<'G>) =
     let results = ResizeArray<Result<'G>>()
 
     let finishGeneration () =
-        let ranked = results.ToArray() |> Array.sortByDescending (fun r -> r.Fitness)
+        // Stable, so tied snakes keep their order. JS sorts are stable, .NET's Array.sortBy is not, and tie order
+        // decides parents: with an unstable sort, .NET runs left the browser's path from generation 2 on.
+        let ranked =
+            results |> List.ofSeq |> List.sortByDescending (fun r -> r.Fitness) |> Array.ofList
         // Next(Next n) from the original: biased toward the top of the ranking.
         let parent () = ranked[rng.Int(rng.Int ranked.Length)].Brain
 
