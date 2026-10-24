@@ -102,11 +102,27 @@ let board (canvas: HTMLCanvasElement) (g: Game) (seen: float[]) =
     ctx.fill ()
 
     let inset = cell * 0.08
+    let width = cell - 2.0 * inset
 
-    g.Body
-    |> List.iteri (fun i c ->
-        ctx.fillStyle <- !^(if i = 0 then Color.head else Color.snake)
-        ctx.fillRect (float c.X * cell + inset, float c.Y * cell + inset, cell - 2.0 * inset, cell - 2.0 * inset))
+    // One thick line through the cell centers, so consecutive cells join and the body's path shows.
+    // Neighbors that are not consecutive keep their gap. Square caps and miter joins fill whole cells.
+    match g.Body with
+    | first :: rest ->
+        ctx.strokeStyle <- !^Color.snake
+        ctx.lineWidth <- width
+        ctx.lineCap <- "square"
+        ctx.lineJoin <- "miter"
+        ctx.beginPath ()
+        ctx.moveTo (center first.X, center first.Y)
+
+        for c in rest do
+            ctx.lineTo (center c.X, center c.Y)
+
+        ctx.stroke ()
+        ctx.lineCap <- "butt"
+        ctx.fillStyle <- !^Color.head
+        ctx.fillRect (float first.X * cell + inset, float first.Y * cell + inset, width, width)
+    | [] -> ()
 
 /// Input y positions: groups of 3 with a gap between groups. 8 rays, then compass and length, then NEAT's bias.
 let private inputLayout top usable count =
