@@ -13,6 +13,8 @@ type Mind =
     | Hamiltonian of Hamilton.Cycle
     /// A frozen Q-table. It plays greedily and no longer learns.
     | Tabular of QTable.Table
+    /// A frozen spiking net. It plays without dopamine and no longer learns.
+    | Spiking of Spiking.Net
 
 /// What a mind computed, carrying what the matching view needs to draw it.
 type Activity =
@@ -28,6 +30,8 @@ type Activity =
     | Route of Hamilton.Cycle * Hamilton.Plan
     /// Q-table, the game it looked at, and the current state.
     | Policy of QTable.Table * Game * state: int
+    /// Spiking net, the spikes of this move, and the move number in the game, so the raster can scroll by moves.
+    | Spikes of Spiking.Net * Spiking.Raster * move: int
 
 type Thought =
     { Input: float[]
@@ -76,3 +80,9 @@ let think mind (g: Game) =
         { Input = input
           Activity = Policy(table, g, s)
           Turn = QTable.greedy table s }
+    | Spiking net ->
+        let raster = Spiking.run net input
+
+        { Input = input
+          Activity = Spikes(net, raster, g.Turns)
+          Turn = Spiking.decide raster }

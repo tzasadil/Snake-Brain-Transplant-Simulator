@@ -527,6 +527,85 @@ let qtable (canvas: HTMLCanvasElement) (q: QTable.Table) (g: Game) (s: int) (cho
 
     caption ctx [ "Turn", outputNames[choice]; "States seen", $"{learned}/{QTable.reachable}" ]
 
+/// Moves the spike raster keeps on screen.
+let private rasterMoves = 10
+
+/// Recent rasters of the game on the board with their move numbers, oldest first. Module state, because only this
+/// view needs a history.
+let private rasterHistory = ResizeArray<int * Spiking.Raster>()
+
+/// A scrolling spike raster: one row per neuron, time to the right, the latest move at the right edge.
+/// Moves on top, hidden neurons in the middle, senses at the bottom.
+let spiking (canvas: HTMLCanvasElement) (raster: Spiking.Raster) (move: int) (choice: int) =
+    // A later move scrolls. The same move again means a new champion took over the position, so it replaces the
+    // last column. An earlier move means a new game.
+    match Seq.tryLast rasterHistory with
+    | Some(last, _) when move = last -> rasterHistory[rasterHistory.Count - 1] <- (move, raster)
+    | Some(last, _) when move > last -> rasterHistory.Add((move, raster))
+    | _ ->
+        rasterHistory.Clear()
+        rasterHistory.Add((move, raster))
+
+    if rasterHistory.Count > rasterMoves then
+        rasterHistory.RemoveAt 0
+
+    let ctx, w, h = fit canvas
+    // Clears the brain picker, which overlaps the canvas top right.
+    let top = 52.0
+    let left = 72.0
+    let gap = 10.0
+    let outputH = 16.0
+    let rowH = (h - top - 8.0 - 3.0 * outputH - 2.0 * gap) / float Spiking.sources
+    let colW = (w - left - 8.0) / float (rasterMoves * Spiking.steps)
+    let hiddenTop = top + 3.0 * outputH + gap
+    let inputTop = hiddenTop + float Spiking.hidden * rowH + gap
+
+    // Row top of neuron n: inputs come first in a raster, but sit at the bottom of the picture.
+    let rowY n =
+        if n < Spiking.inputs then inputTop + float n * rowH
+        elif n < Spiking.sources then hiddenTop + float (n - Spiking.inputs) * rowH
+        else top + float (n - Spiking.sources) * outputH
+
+    let rowHeight n = if n >= Spiking.sources then outputH else rowH
+    let shown = rasterHistory.Count
+
+    for m in 0 .. shown - 1 do
+        let _, r = rasterHistory[m]
+        let x0 = left + float (rasterMoves - shown + m) * float Spiking.steps * colW
+
+        ctx.globalAlpha <- 1.0
+        ctx.strokeStyle <- !^Color.grid
+        ctx.lineWidth <- 1.0
+        line ctx x0 top x0 (h - 8.0)
+
+        for n in 0 .. Spiking.neurons - 1 do
+            ctx.fillStyle <-
+                !^(if n < Spiking.inputs then Color.input
+                   elif n < Spiking.sources then Color.text
+                   else Color.snake)
+
+            ctx.globalAlpha <- if m = shown - 1 then 1.0 else 0.6
+
+            for t in 0 .. Spiking.steps - 1 do
+                if r.Spikes[n * Spiking.steps + t] then
+                    ctx.fillRect (x0 + float t * colW, rowY n, max 1.0 (colW - 0.5), max 1.0 (rowHeight n * 0.8))
+
+    ctx.globalAlpha <- 1.0
+    ctx.font <- "12px system-ui, sans-serif"
+    ctx.textAlign <- "right"
+    ctx.textBaseline <- "middle"
+
+    outputNames
+    |> Array.iteri (fun o label ->
+        ctx.fillStyle <- !^(if o = choice then Color.text else Color.muted)
+        ctx.fillText (label, left - 8.0, top + (float o + 0.5) * outputH))
+
+    ctx.fillStyle <- !^Color.muted
+    ctx.fillText ("Hidden", left - 8.0, hiddenTop + float Spiking.hidden * rowH / 2.0)
+    ctx.fillText ("Senses", left - 8.0, inputTop + float Spiking.inputs * rowH / 2.0)
+    let spikes = raster.Spikes |> Array.filter id |> Array.length
+    caption ctx [ "Turn", outputNames[choice]; "Spikes", string spikes ]
+
 /// A connectome circuit at real soma positions over a faint outline: the fly brain seen from behind,
 /// so its left is on the left, or the worm from the side, head on the left.
 /// Synapses show only while they carry signal, so the active paths stand out of thousands.
@@ -610,6 +689,7 @@ let thought (canvas: HTMLCanvasElement) (t: Mind.Thought) =
     | Mind.Path(tree, answers) -> program canvas tree answers (choiceIndex t.Turn)
     | Mind.Route(cycle, plan) -> hamilton canvas cycle plan (choiceIndex t.Turn)
     | Mind.Policy(table, game, state) -> qtable canvas table game state (choiceIndex t.Turn)
+    | Mind.Spikes(_, raster, move) -> spiking canvas raster move (choiceIndex t.Turn)
 
 /// Generation x position on the chart. Bars keep a minimum width until history outgrows it.
 let private slots count = max count 60

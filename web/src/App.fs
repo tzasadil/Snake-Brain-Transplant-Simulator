@@ -63,6 +63,8 @@ type private Species =
     | HamiltonSpecies
     /// Learns during play. Each game ends in a snapshot that counts as one generation.
     | QTableSpecies
+    /// Learns during play, like the Q-table.
+    | SpikingSpecies
     | WiredSpecies of Kind
 
 /// Dropdown value, circuit file, and legend element of each wired kind.
@@ -72,7 +74,7 @@ let private info =
     | Worm -> {| Value = "worm"; Url = wormUrl; Name = "Worm"; Legend = "legend-worm" |}
 
 let private kinds = [ Fly; Worm ]
-let private allSpecies = NetSpecies :: NeatSpecies :: ProgramSpecies :: QTableSpecies :: HamiltonSpecies :: List.map WiredSpecies kinds
+let private allSpecies = NetSpecies :: NeatSpecies :: ProgramSpecies :: QTableSpecies :: SpikingSpecies :: HamiltonSpecies :: List.map WiredSpecies kinds
 
 /// Dropdown value and legend element of each species.
 let private describe =
@@ -82,6 +84,7 @@ let private describe =
     | ProgramSpecies -> {| Value = "program"; Legend = "legend-program" |}
     | HamiltonSpecies -> {| Value = "hamilton"; Legend = "legend-hamilton" |}
     | QTableSpecies -> {| Value = "qtable"; Legend = "legend-qtable" |}
+    | SpikingSpecies -> {| Value = "spiking"; Legend = "legend-spiking" |}
     | WiredSpecies k -> {| Value = (info k).Value; Legend = (info k).Legend |}
 
 /// Which champion plays next.
@@ -162,12 +165,14 @@ let private circuit () =
     | NeatSpecies
     | ProgramSpecies
     | HamiltonSpecies
-    | QTableSpecies -> None
+    | QTableSpecies
+    | SpikingSpecies -> None
 
 /// What one chart bar counts: a generation, or one game for brains that learn during play.
 let private unitOf =
     function
-    | QTableSpecies -> {| Short = "Game"; Long = "Game"; Label = "Games learned" |}
+    | QTableSpecies
+    | SpikingSpecies -> {| Short = "Game"; Long = "Game"; Label = "Games learned" |}
     | _ -> {| Short = "Gen"; Long = "Generation"; Label = "Generation" |}
 
 let private moveMs () = 160.0 / float speedSelect.value
@@ -319,6 +324,7 @@ let private send () =
     | ProgramSpecies -> worker.postMessage (order "program" None)
     | HamiltonSpecies -> worker.postMessage (order "none" None)
     | QTableSpecies -> worker.postMessage (order "qtable" None)
+    | SpikingSpecies -> worker.postMessage (order "spiking" None)
     | WiredSpecies k ->
         match circuits[k] with
         | Ready(text, _) -> worker.postMessage (order "circuit" (Some text))

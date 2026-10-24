@@ -42,6 +42,9 @@ let private start (order: Order) : Train =
     | "qtable", _ ->
         let learner = Learner(order.Seed, qtable)
         fun hasTime -> learner.Train hasTime |> List.map (reportTable order.Run)
+    | "spiking", _ ->
+        let learner = Learner(order.Seed, spiking)
+        fun hasTime -> learner.Train hasTime |> List.map (reportSpiking order.Run)
     | "circuit", Some text ->
         match parseCircuit text with
         | Ok circuit ->

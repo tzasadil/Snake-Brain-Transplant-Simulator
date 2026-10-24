@@ -14,6 +14,7 @@
     <Compile Include="Program.fs" />
     <Compile Include="Hamilton.fs" />
     <Compile Include="QTable.fs" />
+    <Compile Include="Spiking.fs" />
     <Compile Include="Mind.fs" />
     <Compile Include="Evolution.fs" />
     <Compile Include="Protocol.fs" />

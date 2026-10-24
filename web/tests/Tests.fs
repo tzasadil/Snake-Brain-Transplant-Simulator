@@ -219,6 +219,29 @@ let tests =
               Expect.notEqual (QTable.greedy q s) Straight "it no longer drives into the wall"
           }
 
+          test "dopamine after fruit strengthens the synapses that chose the move" {
+              // Fruit straight ahead. Source 0 fired on every step, and every move was equally likely.
+              let g = place [ cell 5 5 ] North (cell 5 4) rng
+              let b = Spiking.start (Rng.Source 1u)
+              b.Counts <- Array.init Spiking.sources (fun j -> if j = 0 then float Spiking.steps else 0.0)
+              b.Policy <- Array.create Spiking.outputs (1.0 / 3.0)
+              Spiking.learn b g Straight (step Straight g)
+              let weight o = b.Net.Weights[o * Spiking.sources]
+              Expect.isGreaterThan (weight 1) 0.0 "straight strengthened"
+              Expect.isLessThan (weight 0) 0.0 "left weakened"
+              Expect.isLessThan (weight 2) 0.0 "right weakened"
+          }
+
+          test "a spiking snapshot stays fixed while learning goes on" {
+              let g = place [ cell 5 5 ] North (cell 5 4) rng
+              let b = Spiking.start (Rng.Source 1u)
+              let snapshot = Spiking.freeze b
+              let before = Array.copy snapshot.Weights
+              b.Counts <- Array.create Spiking.sources 1.0
+              Spiking.learn b g Straight (step Straight g)
+              Expect.equal snapshot.Weights before "snapshot unchanged"
+          }
+
           test "the snake starves without fruit" {
               let g = { place [ cell 5 5 ] North (cell 0 0) rng with Hunger = starveAfter 0 }
 

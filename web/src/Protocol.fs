@@ -10,7 +10,7 @@ open SnakeEvo.Mind
 
 /// Desired worker state, sent whole. Each order is idempotent, so no command can arrive out of context.
 /// A new Run starts a fresh population from Seed.
-/// Species is "net", "neat", "program", "qtable", "circuit", or "none". None stops training: the Hamiltonian cycle
+/// Species is "net", "neat", "program", "qtable", "spiking", "circuit", or "none". None stops training: the Hamiltonian cycle
 /// mode does not learn. A string, because structured clone would break a union.
 /// Circuit holds the connectome JSON in fruit fly and worm modes. The page already loaded and validated it,
 /// so the worker needs no fetch and no error path of its own. Up to 100 KB, sent only on page actions.
@@ -34,6 +34,9 @@ type NeatGenes =
        Weight: float[]
        Enabled: bool[] |}
 
+/// The fixed wiring travels with every snapshot. About 2,000 numbers, small next to the time a game takes.
+type SpikingGenes = {| Wiring: float[]; Weights: float[] |}
+
 /// One finished generation. Run lets the page drop reports from a population it already replaced.
 /// Exactly one genome field is set, matching the run's species. Program is the tree in Program.encode form.
 type Report =
@@ -44,7 +47,8 @@ type Report =
        Wired: WiredGenes option
        Neat: NeatGenes option
        Program: int[] option
-       Table: float[] option |}
+       Table: float[] option
+       Spiking: SpikingGenes option |}
 
 /// A report with no genome yet. Each species fills in its own field.
 let private empty run (c: Champion<_>) : Report =
@@ -55,7 +59,8 @@ let private empty run (c: Champion<_>) : Report =
        Wired = None
        Neat = None
        Program = None
-       Table = None |}
+       Table = None
+       Spiking = None |}
 
 let reportNet run (c: Champion<Brain.Brain>) =
     {| empty run c with Net = Some c.Brain |}
@@ -83,6 +88,13 @@ let reportProgram run (c: Champion<Program.Tree>) =
     {| empty run c with Program = Some(Program.encode c.Brain) |}
 
 let reportTable run (c: Champion<QTable.Table>) = {| empty run c with Table = Some c.Brain |}
+
+let reportSpiking run (c: Champion<Spiking.Net>) =
+    {| empty run c with
+        Spiking =
+            Some
+                {| Wiring = c.Brain.Wiring
+                   Weights = c.Brain.Weights |} |}
 
 /// None when a connectome report arrives without a loaded circuit. The page only starts those runs after loading it.
 let champion (circuit: Connectome.Circuit option) (r: Report) : Champion<Mind> option =
@@ -114,7 +126,12 @@ let champion (circuit: Connectome.Circuit option) (r: Report) : Champion<Mind> o
       wired
       r.Neat |> Option.map grown
       r.Program |> Option.map (Program.decode >> Rules)
-      r.Table |> Option.map Tabular ]
+      r.Table |> Option.map Tabular
+      r.Spiking
+      |> Option.map (fun n ->
+          Mind.Spiking
+              { Wiring = n.Wiring
+                Weights = n.Weights }) ]
     |> List.tryPick id
     |> Option.map (fun m ->
         { Generation = r.Generation

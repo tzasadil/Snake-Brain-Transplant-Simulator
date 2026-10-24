@@ -15,6 +15,7 @@
     <Compile Include="../src/Program.fs" />
     <Compile Include="../src/Hamilton.fs" />
     <Compile Include="../src/QTable.fs" />
+    <Compile Include="../src/Spiking.fs" />
     <Compile Include="../src/Mind.fs" />
     <Compile Include="../src/Evolution.fs" />
     <Compile Include="Tests.fs" />

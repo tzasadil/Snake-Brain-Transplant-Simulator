@@ -170,6 +170,13 @@ let qtable =
       Freeze = QTable.freeze
       Mind = Tabular }
 
+let spiking =
+    { Start = Spiking.start
+      Act = Spiking.act
+      Learn = Spiking.learn
+      Freeze = Spiking.freeze
+      Mind = Mind.Spiking }
+
 /// Learns in slices, like Trainer. One learner plays every game, so there is no population.
 /// Every game ends in a snapshot that counts as one generation, so the chart, generation picking, and
 /// follow-latest work as for evolved brains. Snapshots every 20 games hid the learning: the Q-table already
