@@ -25,14 +25,17 @@
               <div><dt>Score</dt><dd id="score">0</dd></div>
               <div><dt>Status</dt><dd id="outcome">Training</dd></div>
             </dl>
-            <label>Speed
-              <select id="speed">
-                <option value="1">1×</option>
-                <option value="2" selected>2×</option>
-                <option value="4">4×</option>
-                <option value="8">8×</option>
-              </select>
-            </label>
+            <div class="playback">
+              <button id="playback" type="button" aria-label="Stop" title="Stop">⏸&#xFE0E;</button>
+              <label>Speed
+                <select id="speed">
+                  <option value="1">1×</option>
+                  <option value="2" selected>2×</option>
+                  <option value="4">4×</option>
+                  <option value="8">8×</option>
+                </select>
+              </label>
+            </div>
           </div>
         </figure>
 

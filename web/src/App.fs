@@ -121,6 +121,7 @@ let private newCycleButton = element "new-cycle" :?> HTMLButtonElement
 let private followBox = element "follow" :?> HTMLInputElement
 let private speedSelect = element "speed" :?> HTMLSelectElement
 let private restartButton = element "restart" :?> HTMLButtonElement
+let private playbackButton = element "playback" :?> HTMLButtonElement
 let private brainSelect = element "brain" :?> HTMLSelectElement
 let private option kind = element $"{(info kind).Value}-option"
 
@@ -136,6 +137,8 @@ let mutable private training = Running
 let mutable private nextPause = pauseEvery
 let mutable private pick = Latest
 let mutable private show = Waiting
+/// False freezes the board and the brain view. Training goes on.
+let mutable private playing = true
 let mutable private lastMove = 0.0
 /// Generation under the mouse on the chart.
 let mutable private hovered: int option = None
@@ -250,6 +253,7 @@ let private render () =
         (match training, show with
          | Failed, _ -> "Training failed"
          | _, Ended(_, finish, _) -> finishLabel finish
+         | _, Playing _ when not playing -> "Stopped"
          | _, Playing _ -> "Playing"
          | _, Waiting -> "Training")
 
@@ -275,6 +279,14 @@ let private render () =
         chartCanvas.setAttribute ("aria-valuenow", string g)
         chartCanvas.setAttribute ("aria-valuetext", $"Generation {g}, score {champions[g - 1].Score}")
     | _ -> ()
+
+    // Icons keep the button small enough for the stats and speed to share one row. U+FE0E asks for text glyphs, not emoji.
+    setText playbackButton (if playing then "⏸\uFE0E" else "▶\uFE0E")
+    let label = if playing then "Stop" else "Resume"
+
+    if playbackButton.getAttribute "aria-label" <> label then
+        playbackButton.setAttribute ("aria-label", label)
+        playbackButton.title <- label
 
     setText
         trainButton
@@ -314,7 +326,8 @@ worker.onmessage <-
                 champions.Add c
 
                 match pick, show with
-                | Latest, Playing replay -> show <- Playing(swap c replay)
+                // A stopped board stays as it is. The next champion after Resume takes over.
+                | Latest, Playing replay when playing -> show <- Playing(swap c replay)
                 | _ -> ()
             | None -> console.error ("Dropped a report: circuit not loaded")
 
@@ -329,7 +342,9 @@ worker.onerror <-
         training <- Failed
 
 let rec private frame (t: float) =
-    advance t
+    if playing then
+        advance t
+
     render ()
     window.requestAnimationFrame frame |> ignore
 
@@ -374,9 +389,25 @@ let private restart () =
     pick <- Latest
     followBox.``checked`` <- true
     show <- Waiting
+    // A stopped board would stay empty, as the first game only starts while playing.
+    playing <- true
     send ()
 
 restartButton.onclick <- fun _ -> restart ()
+
+playbackButton.onclick <-
+    fun _ ->
+        playing <- not playing
+
+        if playing then
+            // Picks up where it stopped, with the full pause after a death still ahead.
+            let t = now ()
+            lastMove <- t
+
+            match show with
+            | Ended(r, finish, _) -> show <- Ended(r, finish, t)
+            | Waiting
+            | Playing _ -> ()
 
 let private choose newSpecies =
     species <- newSpecies

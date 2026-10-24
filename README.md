@@ -49,6 +49,7 @@ Needs the .NET 10 SDK and Node.js with pnpm.
 | Score chart | Training score of each generation's best snake. Click to watch it play a new game. Arrow keys work too. |
 | `Pause` / `Resume` | Stop or continue training. It also pauses every 300 generations. |
 | `Follow latest` | Each new champion takes over the game in progress |
+| `⏸` / `▶` | Stop or resume the game on the board. Training goes on. |
 | `Speed` | Playback speed |
 | `Restart` | Train a new random population |
 | `New cycle` | Hamiltonian cycle mode only, which does not train: draw a new cycle |

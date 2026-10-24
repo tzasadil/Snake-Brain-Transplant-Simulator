@@ -209,6 +209,9 @@ label {
 }
 
 /* Stays bottom right when it wraps under the stats on narrow screens. */
-.board-foot label {
+.board-foot .playback {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
