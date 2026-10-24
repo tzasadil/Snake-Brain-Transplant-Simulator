@@ -10,7 +10,7 @@ open SnakeEvo.Mind
 
 /// Desired worker state, sent whole. Each order is idempotent, so no command can arrive out of context.
 /// A new Run starts a fresh population from Seed.
-/// Species is "net", "neat", "program", "circuit", or "none". None stops training: the Hamiltonian cycle
+/// Species is "net", "neat", "program", "qtable", "circuit", or "none". None stops training: the Hamiltonian cycle
 /// mode does not learn. A string, because structured clone would break a union.
 /// Circuit holds the connectome JSON in fruit fly and worm modes. The page already loaded and validated it,
 /// so the worker needs no fetch and no error path of its own. Up to 100 KB, sent only on page actions.
@@ -35,8 +35,7 @@ type NeatGenes =
        Enabled: bool[] |}
 
 /// One finished generation. Run lets the page drop reports from a population it already replaced.
-/// Exactly one of Net, Wired, Neat, and Program is set, matching the run's species.
-/// Program is the tree in Program.encode form.
+/// Exactly one genome field is set, matching the run's species. Program is the tree in Program.encode form.
 type Report =
     {| Run: int
        Generation: int
@@ -44,68 +43,52 @@ type Report =
        Net: float[][][] option
        Wired: WiredGenes option
        Neat: NeatGenes option
-       Program: int[] option |}
+       Program: int[] option
+       Table: float[] option |}
 
-let private report run (c: Champion<_>) net wired neat program : Report =
+/// A report with no genome yet. Each species fills in its own field.
+let private empty run (c: Champion<_>) : Report =
     {| Run = run
        Generation = c.Generation
        Score = c.Score
-       Net = net
-       Wired = wired
-       Neat = neat
-       Program = program |}
+       Net = None
+       Wired = None
+       Neat = None
+       Program = None
+       Table = None |}
 
-let reportNet run (c: Champion<Brain.Brain>) = report run c (Some c.Brain) None None None
+let reportNet run (c: Champion<Brain.Brain>) =
+    {| empty run c with Net = Some c.Brain |}
 
 let reportWired run (c: Champion<Connectome.Genome>) =
-    report
-        run
-        c
-        None
-        (Some
-            {| Encoder = c.Brain.Encoder
-               Gain = c.Brain.Gain
-               Threshold = c.Brain.Threshold |})
-        None
-        None
+    {| empty run c with
+        Wired =
+            Some
+                {| Encoder = c.Brain.Encoder
+                   Gain = c.Brain.Gain
+                   Threshold = c.Brain.Threshold |} |}
 
 let reportNeat run (c: Champion<Neat.Genome>) =
     let links = c.Brain
 
-    report
-        run
-        c
-        None
-        None
-        (Some
-            {| From = links |> Array.map (fun l -> l.From)
-               To = links |> Array.map (fun l -> l.To)
-               Weight = links |> Array.map (fun l -> l.Weight)
-               Enabled = links |> Array.map (fun l -> l.Enabled) |})
-        None
+    {| empty run c with
+        Neat =
+            Some
+                {| From = links |> Array.map (fun l -> l.From)
+                   To = links |> Array.map (fun l -> l.To)
+                   Weight = links |> Array.map (fun l -> l.Weight)
+                   Enabled = links |> Array.map (fun l -> l.Enabled) |} |}
 
 let reportProgram run (c: Champion<Program.Tree>) =
-    report run c None None None (Some(Program.encode c.Brain))
+    {| empty run c with Program = Some(Program.encode c.Brain) |}
+
+let reportTable run (c: Champion<QTable.Table>) = {| empty run c with Table = Some c.Brain |}
 
 /// None when a connectome report arrives without a loaded circuit. The page only starts those runs after loading it.
 let champion (circuit: Connectome.Circuit option) (r: Report) : Champion<Mind> option =
-    let mind =
-        match r.Net, r.Wired, r.Neat, r.Program, circuit with
-        | Some brain, _, _, _, _ -> Some(Net brain)
-        | _, _, _, Some code, _ -> Some(Rules(Program.decode code))
-        | _, _, Some genes, _, _ ->
-            Some(
-                Grown(
-                    Neat.compile (
-                        Array.init genes.From.Length (fun i ->
-                            { From = genes.From[i]
-                              To = genes.To[i]
-                              Weight = genes.Weight[i]
-                              Enabled = genes.Enabled[i] }: Neat.Link)
-                    )
-                )
-            )
-        | None, Some genes, _, _, Some c ->
+    let wired =
+        match r.Wired, circuit with
+        | Some genes, Some c ->
             Some(
                 Wired(
                     c,
@@ -116,7 +99,23 @@ let champion (circuit: Connectome.Circuit option) (r: Report) : Champion<Mind> o
             )
         | _ -> None
 
-    mind
+    let grown (genes: NeatGenes) =
+        Grown(
+            Neat.compile (
+                Array.init genes.From.Length (fun i ->
+                    { From = genes.From[i]
+                      To = genes.To[i]
+                      Weight = genes.Weight[i]
+                      Enabled = genes.Enabled[i] }: Neat.Link)
+            )
+        )
+
+    [ r.Net |> Option.map Net
+      wired
+      r.Neat |> Option.map grown
+      r.Program |> Option.map (Program.decode >> Rules)
+      r.Table |> Option.map Tabular ]
+    |> List.tryPick id
     |> Option.map (fun m ->
         { Generation = r.Generation
           Brain = m

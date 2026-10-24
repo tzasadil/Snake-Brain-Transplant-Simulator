@@ -202,6 +202,23 @@ let tests =
                   | _ -> ()
           }
 
+          test "the Q-table state sees danger and fruit from the snake's side" {
+              // At the left wall facing North: West is the snake's left. Fruit 3 cells East is to its right.
+              let g = place [ cell 0 5 ] North (cell 3 5) rng
+              let danger, ahead, right = 4, 0, 1
+              Expect.equal (QTable.state g) (danger * 9 + (ahead + 1) * 3 + (right + 1)) "danger left, fruit right"
+          }
+
+          test "a Q-table learns that a deadly move is bad" {
+              // Facing a wall: going straight dies.
+              let g = place [ cell 5 0 ] North (cell 9 9) rng
+              let q = QTable.start (Rng.Source 1u)
+              QTable.learn q g Straight (step Straight g)
+              let s = QTable.state g
+              Expect.isLessThan q[s * 3 + 1] 0.0 "straight into the wall lost value"
+              Expect.notEqual (QTable.greedy q s) Straight "it no longer drives into the wall"
+          }
+
           test "the snake starves without fruit" {
               let g = { place [ cell 5 5 ] North (cell 0 0) rng with Hunger = starveAfter 0 }
 

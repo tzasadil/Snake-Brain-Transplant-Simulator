@@ -21,7 +21,7 @@
           <canvas id="board" class="board" role="img" aria-label="Snake board with vision rays"></canvas>
           <div class="board-foot">
             <dl class="stats">
-              <div><dt>Generation</dt><dd id="generation">–</dd></div>
+              <div><dt id="generation-label">Generation</dt><dd id="generation">–</dd></div>
               <div><dt>Score</dt><dd id="score">0</dd></div>
               <div><dt>Status</dt><dd id="outcome">Training</dd></div>
             </dl>
@@ -47,6 +47,7 @@
               <option value="net">Neural net</option>
               <option value="neat">NEAT</option>
               <option value="program">Program tree</option>
+              <option value="qtable">Q-table</option>
               <option value="hamilton">Hamiltonian cycle</option>
             </select>
           </label>
@@ -71,6 +72,13 @@
             <li style="--swatch: var(--snake)">Chosen move</li>
             <li style="--swatch: var(--text)">Active path</li>
             <li style="--swatch: var(--muted)">Not taken</li>
+          </ul>
+          <ul class="legend" id="legend-qtable" hidden>
+            <li style="--swatch: var(--positive)">Value +</li>
+            <li style="--swatch: var(--negative)">Value −</li>
+            <li style="--swatch: var(--head)">Move</li>
+            <li style="--swatch: var(--snake)">Snake</li>
+            <li style="--swatch: var(--fruit)">Fruit</li>
           </ul>
           <ul class="legend" id="legend-hamilton" hidden>
             <li style="--swatch: var(--muted)">Cycle</li>
@@ -103,7 +111,7 @@
           aria-valuemin="1" aria-valuemax="1" aria-valuenow="1"></canvas>
         <div class="controls" id="training-controls">
           <dl class="stats">
-            <div><dt>Generation</dt><dd id="trained">0</dd></div>
+            <div><dt id="trained-label">Generation</dt><dd id="trained">0</dd></div>
             <div><dt>Latest score</dt><dd id="latest">–</dd></div>
             <div><dt>Best score</dt><dd id="best">–</dd></div>
           </dl>

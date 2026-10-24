@@ -69,6 +69,17 @@ The variants change `randomTest` and `insertChance` in `web/src/Program.fs`.
 - Without `Blocked`, trees chase the fruit but run into their own body. The fitting `Within` test, body within 1 cell ahead, is about a 1 in 230 draw.
 - The insert mutation wraps a branch in a new test, so a guard like "blocked ahead?" can go above a tree that already chases fruit in one step.
 
+## Q-table
+
+One snapshot per game, so "generation" means games learned.
+
+| Games learned | 60 | 300 |
+|---|---|---|
+| Fruit per game | 18.1 | 22.9 |
+
+- It learns much faster than evolution: frozen test games score 0 or 1 in the first few games and about 15 to 20 after 20 to 30 games.
+- It levels off at about 23 fruit (23.3 after 1,200 games). A likely cause, not tested: with 64 situations it sees its body only in the next cell, so a long snake can trap itself.
+
 ## Hamiltonian cycle
 
 200 random cycles, one game each: the snake filled the board every time (score 99), in about 2,300 moves on average. It never hit a wall or itself, and it never starved. This mode does not learn, so it has no generations to compare.

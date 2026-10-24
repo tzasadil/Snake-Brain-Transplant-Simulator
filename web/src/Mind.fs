@@ -11,6 +11,8 @@ type Mind =
     | Grown of Neat.Net
     | Rules of Program.Tree
     | Hamiltonian of Hamilton.Cycle
+    /// A frozen Q-table. It plays greedily and no longer learns.
+    | Tabular of QTable.Table
 
 /// What a mind computed, carrying what the matching view needs to draw it.
 type Activity =
@@ -24,6 +26,8 @@ type Activity =
     | Path of Program.Tree * bool list
     /// Cycle and the positions behind the move.
     | Route of Hamilton.Cycle * Hamilton.Plan
+    /// Q-table, the game it looked at, and the current state.
+    | Policy of QTable.Table * Game * state: int
 
 type Thought =
     { Input: float[]
@@ -66,3 +70,9 @@ let think mind (g: Game) =
         { Input = input
           Activity = Route(cycle, plan)
           Turn = turn }
+    | Tabular table ->
+        let s = QTable.state g
+
+        { Input = input
+          Activity = Policy(table, g, s)
+          Turn = QTable.greedy table s }

@@ -61,6 +61,8 @@ type private Species =
     | NeatSpecies
     | ProgramSpecies
     | HamiltonSpecies
+    /// Learns during play. Each game ends in a snapshot that counts as one generation.
+    | QTableSpecies
     | WiredSpecies of Kind
 
 /// Dropdown value, circuit file, and legend element of each wired kind.
@@ -70,7 +72,7 @@ let private info =
     | Worm -> {| Value = "worm"; Url = wormUrl; Name = "Worm"; Legend = "legend-worm" |}
 
 let private kinds = [ Fly; Worm ]
-let private allSpecies = NetSpecies :: NeatSpecies :: ProgramSpecies :: HamiltonSpecies :: List.map WiredSpecies kinds
+let private allSpecies = NetSpecies :: NeatSpecies :: ProgramSpecies :: QTableSpecies :: HamiltonSpecies :: List.map WiredSpecies kinds
 
 /// Dropdown value and legend element of each species.
 let private describe =
@@ -79,6 +81,7 @@ let private describe =
     | NeatSpecies -> {| Value = "neat"; Legend = "legend-neat" |}
     | ProgramSpecies -> {| Value = "program"; Legend = "legend-program" |}
     | HamiltonSpecies -> {| Value = "hamilton"; Legend = "legend-hamilton" |}
+    | QTableSpecies -> {| Value = "qtable"; Legend = "legend-qtable" |}
     | WiredSpecies k -> {| Value = (info k).Value; Legend = (info k).Legend |}
 
 /// Which champion plays next.
@@ -158,7 +161,14 @@ let private circuit () =
     | NetSpecies
     | NeatSpecies
     | ProgramSpecies
-    | HamiltonSpecies -> None
+    | HamiltonSpecies
+    | QTableSpecies -> None
+
+/// What one chart bar counts: a generation, or one game for brains that learn during play.
+let private unitOf =
+    function
+    | QTableSpecies -> {| Short = "Game"; Long = "Game"; Label = "Games learned" |}
+    | _ -> {| Short = "Gen"; Long = "Generation"; Label = "Generation" |}
 
 let private moveMs () = 160.0 / float speedSelect.value
 
@@ -271,13 +281,13 @@ let private render () =
          else string (champions |> Seq.map (fun c -> c.Score) |> Seq.max))
 
     let current = replay |> Option.bind generationOf
-    View.chart chartCanvas (champions.ToArray()) current hovered
+    View.chart chartCanvas (champions.ToArray()) (unitOf species).Short current hovered
     chartCanvas.setAttribute ("aria-valuemax", string (max 1 champions.Count))
 
     match current with
     | Some g when g >= 1 && g <= champions.Count ->
         chartCanvas.setAttribute ("aria-valuenow", string g)
-        chartCanvas.setAttribute ("aria-valuetext", $"Generation {g}, score {champions[g - 1].Score}")
+        chartCanvas.setAttribute ("aria-valuetext", $"{(unitOf species).Long} {g}, score {champions[g - 1].Score}")
     | _ -> ()
 
     // Icons keep the button small enough for the stats and speed to share one row. U+FE0E asks for text glyphs, not emoji.
@@ -308,6 +318,7 @@ let private send () =
     | NeatSpecies -> worker.postMessage (order "neat" None)
     | ProgramSpecies -> worker.postMessage (order "program" None)
     | HamiltonSpecies -> worker.postMessage (order "none" None)
+    | QTableSpecies -> worker.postMessage (order "qtable" None)
     | WiredSpecies k ->
         match circuits[k] with
         | Ready(text, _) -> worker.postMessage (order "circuit" (Some text))
@@ -416,6 +427,9 @@ let private choose newSpecies =
 
     for s in allSpecies do
         show' (element (describe s).Legend) (s = newSpecies)
+
+    for id in [ "generation-label"; "trained-label" ] do
+        setText (element id) (unitOf newSpecies).Label
 
     // The cycle does not train, so it has no history to chart and no training to control.
     let trains = newSpecies <> HamiltonSpecies

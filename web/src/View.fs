@@ -359,6 +359,22 @@ let program (canvas: HTMLCanvasElement) (tree: Program.Tree) (answers: bool list
     let tests = lines |> List.filter (fun l -> not l.Leaf) |> List.length
     caption ctx [ "Turn", outputNames[choice]; "Tests", string tests ]
 
+/// An arrow from x, y along the unit direction dx, dy. Wing sets the head size.
+let private arrow (ctx: CanvasRenderingContext2D) (color: string) width wing x y dx dy length =
+    let tipX, tipY = x + dx * length, y + dy * length
+    ctx.strokeStyle <- !^color
+    ctx.fillStyle <- !^color
+    ctx.lineWidth <- width
+    ctx.lineCap <- "round"
+    line ctx x y (tipX - dx * wing) (tipY - dy * wing)
+    ctx.beginPath ()
+    ctx.moveTo (tipX, tipY)
+    ctx.lineTo (tipX - dx * wing * 1.6 - dy * wing, tipY - dy * wing * 1.6 + dx * wing)
+    ctx.lineTo (tipX - dx * wing * 1.6 + dy * wing, tipY - dy * wing * 1.6 - dx * wing)
+    ctx.closePath ()
+    ctx.fill ()
+    ctx.lineCap <- "butt"
+
 /// The Hamiltonian cycle on the board, each cell numbered by its position along it, with the snake's body on top
 /// and an arrow to the cell it enters next. An earlier version also lit the stretch a shortcut may reach,
 /// but that needed explaining.
@@ -416,24 +432,100 @@ let hamilton (canvas: HTMLCanvasElement) (c: Hamilton.Cycle) (plan: Hamilton.Pla
     circle ctx hx hy (cell * 0.14)
     ctx.fill ()
 
-    // Arrow from the head into the next cell, its tip short of the cell center so the number stays readable.
+    // Its tip stops short of the next cell's center, so the number stays readable.
     let tx, ty = center plan.Target
-    let dx, dy = (tx - hx) / cell, (ty - hy) / cell
-    let tipX, tipY = hx + dx * cell * 0.75, hy + dy * cell * 0.75
-    let wing = cell * 0.16
-    ctx.strokeStyle <- !^Color.head
-    ctx.fillStyle <- !^Color.head
-    ctx.lineWidth <- 2.5
-    line ctx hx hy (tipX - dx * wing) (tipY - dy * wing)
-    ctx.beginPath ()
-    ctx.moveTo (tipX, tipY)
-    ctx.lineTo (tipX - dx * wing * 1.6 - dy * wing, tipY - dy * wing * 1.6 + dx * wing)
-    ctx.lineTo (tipX - dx * wing * 1.6 + dy * wing, tipY - dy * wing * 1.6 - dx * wing)
-    ctx.closePath ()
-    ctx.fill ()
-    ctx.lineCap <- "butt"
+    ctx.globalAlpha <- 1.0
+    arrow ctx Color.head 2.5 (cell * 0.16) hx hy ((tx - hx) / cell) ((ty - hy) / cell) (cell * 0.75)
 
     caption ctx [ "Turn", outputNames[choice]; "Jump", string ((plan.Target - plan.Head + n) % n) ]
+
+/// A Q-table as a policy map: in every free cell, the move the table picks if the head were there, facing the
+/// way it faces now. Brightness is the move's value. Beside it, the current state and its three values.
+let qtable (canvas: HTMLCanvasElement) (q: QTable.Table) (g: Game) (s: int) (choice: int) =
+    let ctx, w, h = fit canvas
+    // Clears the brain picker, which overlaps the canvas top right.
+    let top = 52.0
+    let side = min (h - top - 8.0) (w * 0.6)
+    let cell = side / float size
+    let ox = 8.0
+    let center x y = ox + (float x + 0.5) * cell, top + (float y + 0.5) * cell
+    let peak = peak q
+    let moveRay = [| 6; 0; 2 |]
+
+    ctx.strokeStyle <- !^Color.grid
+    ctx.lineWidth <- 1.0
+    ctx.strokeRect (ox, top, side, side)
+
+    for x in 0 .. size - 1 do
+        for y in 0 .. size - 1 do
+            let cx, cy = center x y
+            let here = { X = x; Y = y }
+
+            if g.Occupied[y * size + x] then
+                ctx.globalAlpha <- 0.5
+                ctx.fillStyle <- !^Color.snake
+                ctx.fillRect (cx - cell * 0.35, cy - cell * 0.35, cell * 0.7, cell * 0.7)
+            elif x = g.Fruit.X && y = g.Fruit.Y then
+                ctx.globalAlpha <- 1.0
+                ctx.fillStyle <- !^Color.fruit
+                circle ctx cx cy (cell * 0.22)
+                ctx.fill ()
+            else
+                let k = QTable.stateAt g here
+                let a = QTable.turnIndex (QTable.greedy q k)
+                let value = q[k * 3 + a]
+                let dx, dy = rayDirection g moveRay[a]
+                ctx.globalAlpha <- 0.2 + 0.8 * abs value / peak
+                let color = if value >= 0.0 then Color.positive else Color.negative
+                arrow ctx color 1.5 (cell * 0.1) (cx - float dx * cell * 0.25) (cy - float dy * cell * 0.25) (float dx) (float dy) (cell * 0.5)
+
+    let head = List.head g.Body
+    let hx, hy = center head.X head.Y
+    let dx, dy = rayDirection g moveRay[choice]
+    ctx.globalAlpha <- 1.0
+    ctx.fillStyle <- !^Color.head
+    ctx.fillRect (hx - cell * 0.35, hy - cell * 0.35, cell * 0.7, cell * 0.7)
+    arrow ctx Color.head 2.5 (cell * 0.16) hx hy (float dx) (float dy) (cell * 0.75)
+
+    // The current state, as the table sees it: danger on each side, and where the fruit is.
+    let x0 = ox + side + 24.0
+    let danger = s / 9
+    let ahead, right = (s % 9) / 3 - 1, s % 3 - 1
+    let fruitRay = Array.findIndex ((=) (ahead, right)) [| 1, 0; 1, 1; 0, 1; -1, 1; -1, 0; -1, -1; 0, -1; 1, -1 |]
+    ctx.font <- "13px system-ui, sans-serif"
+    ctx.textAlign <- "left"
+    ctx.textBaseline <- "middle"
+    ctx.fillStyle <- !^Color.muted
+    ctx.fillText ("Danger", x0, top + 10.0)
+    ctx.fillText ("Fruit", x0, top + 34.0)
+
+    [| "←"; "↑"; "→" |]
+    |> Array.iteri (fun i label ->
+        ctx.fillStyle <- !^(if danger &&& (4 >>> i) <> 0 then Color.fruit else Color.muted)
+        ctx.fillText (label, x0 + 56.0 + float i * 18.0, top + 10.0))
+
+    ctx.fillStyle <- !^Color.fruit
+    ctx.fillText (rayLabels[fruitRay], x0 + 56.0, top + 34.0)
+
+    let barW = w - x0 - 8.0
+
+    outputNames
+    |> Array.iteri (fun a label ->
+        let value = q[s * 3 + a]
+        let y = top + 70.0 + float a * 42.0
+        ctx.fillStyle <- !^(if a = choice then Color.text else Color.muted)
+        ctx.fillText ($"{label} {value:F2}", x0, y)
+        ctx.fillStyle <- !^(if value >= 0.0 then Color.positive else Color.negative)
+        ctx.globalAlpha <- if a = choice then 1.0 else 0.5
+        ctx.fillRect (x0, y + 10.0, max 1.0 (barW * abs value / peak), 6.0)
+        ctx.globalAlpha <- 1.0)
+
+    let learned =
+        Array.init QTable.stateCount id
+        |> Array.filter (fun k -> q[k * 3] <> 0.0 || q[k * 3 + 1] <> 0.0 || q[k * 3 + 2] <> 0.0)
+        |> Array.length
+
+    caption ctx [ "Turn", outputNames[choice]; "States seen", $"{learned}/{QTable.reachable}" ]
 
 /// A connectome circuit at real soma positions over a faint outline: the fly brain seen from behind,
 /// so its left is on the left, or the worm from the side, head on the left.
@@ -517,12 +609,14 @@ let thought (canvas: HTMLCanvasElement) (t: Mind.Thought) =
     | Mind.Graph(net, value) -> neat canvas net value (choiceIndex t.Turn)
     | Mind.Path(tree, answers) -> program canvas tree answers (choiceIndex t.Turn)
     | Mind.Route(cycle, plan) -> hamilton canvas cycle plan (choiceIndex t.Turn)
+    | Mind.Policy(table, game, state) -> qtable canvas table game state (choiceIndex t.Turn)
 
 /// Generation x position on the chart. Bars keep a minimum width until history outgrows it.
 let private slots count = max count 60
 
 /// Best score per generation, unlabeled. The generation on the board is highlighted, the hovered one brightened and labeled.
-let chart (canvas: HTMLCanvasElement) (champions: Champion<_>[]) (current: int option) (hovered: int option) =
+/// Unit names a bar, such as "Gen", or "Game" for brains that learn during play.
+let chart (canvas: HTMLCanvasElement) (champions: Champion<_>[]) (unit: string) (current: int option) (hovered: int option) =
     let ctx, w, h = fit canvas
     let plotH = h - 26.0
     let top = champions |> Array.fold (fun m c -> max m c.Score) 0
@@ -551,7 +645,7 @@ let chart (canvas: HTMLCanvasElement) (champions: Champion<_>[]) (current: int o
         ctx.textBaseline <- "top"
         ctx.textAlign <- "right"
         ctx.fillStyle <- !^Color.text
-        ctx.fillText ($"Gen {g} · score {champions[g - 1].Score}", w, 2.0)
+        ctx.fillText ($"{unit} {g} · score {champions[g - 1].Score}", w, 2.0)
     | None -> ()
 
 /// Generation under a click at x, if any.

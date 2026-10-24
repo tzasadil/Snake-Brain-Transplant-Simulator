@@ -5,12 +5,13 @@
 //   dotnet fsi tools/experiment.fsx net
 //   dotnet fsi tools/experiment.fsx neat
 //   dotnet fsi tools/experiment.fsx program
+//   dotnet fsi tools/experiment.fsx qtable
 //   dotnet fsi tools/experiment.fsx data/fly-circuit.json
 //   dotnet fsi tools/experiment.fsx data/fly-circuit.json random 1,42,5,9 60
 //   dotnet fsi tools/experiment.fsx data/fly-circuit.json real 1,42,5,9 60 tuned
 //   dotnet fsi tools/experiment.fsx data/fly-circuit.json real 1,42,5,9 60 free
 //
-// Arguments: brain (net, neat, program, or a circuit file), wiring (real, random, or signs; circuits only),
+// Arguments: brain (net, neat, program, qtable, or a circuit file), wiring (real, random, or signs; circuits only),
 // comma-separated seeds (default 1,42,5,9), generations (default 60),
 // weights (fixed, tuned, or free; circuits only, default fixed).
 // Every 20 generations it scores the champion over 20 fixed games. A champion's own training score is a
@@ -27,7 +28,7 @@
 // Free weights also add a sign gene per edge, starting at the real sign. A mutation flips it outright: with about
 // 56 mutations per child over 5,800 genes, each gene mutates about once per lineage in 60 generations, so a small
 // Gaussian step on a signed weight would almost never cross 0. This breaks Dale's law (one sign per neuron).
-#load "../src/Native.fs" "../src/Rng.fs" "../src/Game.fs" "../src/Brain.fs" "../src/Connectome.fs" "../src/Neat.fs" "../src/Program.fs" "../src/Hamilton.fs" "../src/Mind.fs" "../src/Evolution.fs"
+#load "../src/Native.fs" "../src/Rng.fs" "../src/Game.fs" "../src/Brain.fs" "../src/Connectome.fs" "../src/Neat.fs" "../src/Program.fs" "../src/Hamilton.fs" "../src/QTable.fs" "../src/Mind.fs" "../src/Evolution.fs"
 
 open System
 open System.IO
@@ -138,16 +139,25 @@ let run (train: uint32 -> (int -> Mind.Mind)) seed =
     let champion = train seed
     [ for gen in 20..20..generations -> gen, evaluate (champion gen) ]
 
-let trainer species toMind seed =
-    let t = Evolution.Trainer(seed, species)
-    let champions = Collections.Generic.Dictionary<int, Mind.Mind>()
+/// Champion minds by generation, training only as far as asked.
+let champions (generation: unit -> int) (train: (unit -> bool) -> Evolution.Champion<'G> list) toMind =
+    let found = Collections.Generic.Dictionary<int, Mind.Mind>()
 
     fun gen ->
-        while t.Generation <= gen do
-            for c in t.Train(fun () -> t.Generation <= gen) do
-                champions[c.Generation] <- toMind c.Brain
+        while generation () <= gen do
+            for c in train (fun () -> generation () <= gen) do
+                found[c.Generation] <- toMind c.Brain
 
-        champions[gen]
+        found[gen]
+
+let trainer species toMind seed =
+    let t = Evolution.Trainer(seed, species)
+    champions (fun () -> t.Generation) t.Train toMind
+
+/// Brains that learn during play. A generation is one game, with a snapshot after it.
+let learner (lifelong: Evolution.Lifelong<_, _>) seed =
+    let l = Evolution.Learner(seed, lifelong)
+    champions (fun () -> l.Generation) l.Train lifelong.Mind
 
 /// Circuit genome plus one log strength per chemical edge, and with `flips` one sign per edge.
 /// Mutation keeps Connectome's 56 per child over all genes.
@@ -181,6 +191,7 @@ let train =
     match brain, weights with
     | "net", _ -> trainer Evolution.net Mind.Net
     | "program", _ -> trainer Evolution.program Mind.Rules
+    | "qtable", _ -> learner Evolution.qtable
     // One species per seed: seeds run in parallel, and NEAT's innovation registry is mutable.
     | "neat", _ -> fun seed -> (let species = Evolution.neat () in trainer species species.Mind seed)
     | _, "fixed" ->
