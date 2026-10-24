@@ -58,6 +58,7 @@ type private Kind =
 
 type private Species =
     | NetSpecies
+    | NeatSpecies
     | WiredSpecies of Kind
 
 /// Dropdown value, circuit file, and legend element of each wired kind.
@@ -67,6 +68,14 @@ let private info =
     | Worm -> {| Value = "worm"; Url = wormUrl; Name = "Worm"; Legend = "legend-worm" |}
 
 let private kinds = [ Fly; Worm ]
+let private allSpecies = NetSpecies :: NeatSpecies :: List.map WiredSpecies kinds
+
+/// Dropdown value and legend element of each species.
+let private describe =
+    function
+    | NetSpecies -> {| Value = "net"; Legend = "legend-net" |}
+    | NeatSpecies -> {| Value = "neat"; Legend = "legend-neat" |}
+    | WiredSpecies k -> {| Value = (info k).Value; Legend = (info k).Legend |}
 
 /// Which champion plays next.
 type private Pick =
@@ -130,7 +139,8 @@ let private circuit () =
         | Ready(_, c) -> Some c
         | Loading
         | Unavailable -> None
-    | NetSpecies -> None
+    | NetSpecies
+    | NeatSpecies -> None
 
 let private moveMs () = 160.0 / float speedSelect.value
 
@@ -241,17 +251,19 @@ let private render () =
          | Failed -> "Resume")
 
 let private send () =
-    let order (circuit: string option) : Order =
+    let order name (circuit: string option) : Order =
         {| Run = run
            Seed = newSeed ()
            Running = (training = Running)
+           Species = name
            Circuit = circuit |}
 
     match species with
-    | NetSpecies -> worker.postMessage (order None)
+    | NetSpecies -> worker.postMessage (order "net" None)
+    | NeatSpecies -> worker.postMessage (order "neat" None)
     | WiredSpecies k ->
         match circuits[k] with
-        | Ready(text, _) -> worker.postMessage (order (Some text))
+        | Ready(text, _) -> worker.postMessage (order "circuit" (Some text))
         // The circuit is still loading, and its arrival starts the run. Sending now would train the wrong species.
         | Loading
         | Unavailable -> ()
@@ -334,24 +346,19 @@ restartButton.onclick <- fun _ -> restart ()
 let private choose newSpecies =
     species <- newSpecies
 
-    brainSelect.value <-
-        match newSpecies with
-        | NetSpecies -> "net"
-        | WiredSpecies k -> (info k).Value
+    brainSelect.value <- (describe newSpecies).Value
 
-    show' (element "legend-net") (newSpecies = NetSpecies)
-
-    for k in kinds do
-        show' (element (info k).Legend) (newSpecies = WiredSpecies k)
+    for s in allSpecies do
+        show' (element (describe s).Legend) (s = newSpecies)
 
     restart ()
 
 brainSelect.onchange <-
     fun _ ->
         choose (
-            match kinds |> List.tryFind (fun k -> (info k).Value = brainSelect.value) with
-            | Some k -> WiredSpecies k
-            | None -> NetSpecies
+            allSpecies
+            |> List.tryFind (fun s -> (describe s).Value = brainSelect.value)
+            |> Option.defaultValue NetSpecies
         )
 
 /// Without its circuit a kind is disabled, and the page falls back to the network, so it still works.

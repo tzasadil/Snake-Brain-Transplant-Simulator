@@ -42,6 +42,7 @@
               <option value="fly" id="fly-option" selected>Fruit fly</option>
               <option value="worm" id="worm-option">Worm</option>
               <option value="net">Neural net</option>
+              <option value="neat">NEAT</option>
             </select>
           </label>
           <canvas id="network" class="network" role="img"
@@ -50,6 +51,14 @@
             <li style="--swatch: var(--wall)">Wall</li>
             <li style="--swatch: var(--snake)">Body</li>
             <li style="--swatch: var(--fruit)">Fruit</li>
+            <li style="--swatch: var(--positive)">Weight +</li>
+            <li style="--swatch: var(--negative)">Weight −</li>
+          </ul>
+          <ul class="legend" id="legend-neat" hidden>
+            <li style="--swatch: var(--wall)">Wall</li>
+            <li style="--swatch: var(--snake)">Body</li>
+            <li style="--swatch: var(--fruit)">Fruit</li>
+            <li style="--swatch: var(--text)">Grown neuron</li>
             <li style="--swatch: var(--positive)">Weight +</li>
             <li style="--swatch: var(--negative)">Weight −</li>
           </ul>

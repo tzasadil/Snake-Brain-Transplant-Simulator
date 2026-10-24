@@ -24,6 +24,14 @@ let connectome circuit =
       Crossover = Connectome.crossover
       Mind = fun genome -> Wired(circuit, genome) }
 
+/// A fresh species per run: its innovation registry must not be shared between trainers.
+let neat () =
+    let innovations = Neat.Innovations()
+
+    { Random = Neat.random
+      Crossover = Neat.crossover innovations
+      Mind = Neat.compile >> Grown }
+
 type Champion<'G> =
     { Generation: int
       Brain: 'G

@@ -3,12 +3,13 @@
 //
 // From web/:
 //   dotnet fsi tools/experiment.fsx net
+//   dotnet fsi tools/experiment.fsx neat
 //   dotnet fsi tools/experiment.fsx data/fly-circuit.json
 //   dotnet fsi tools/experiment.fsx data/fly-circuit.json random 1,42,5,9 60
 //   dotnet fsi tools/experiment.fsx data/fly-circuit.json real 1,42,5,9 60 tuned
 //   dotnet fsi tools/experiment.fsx data/fly-circuit.json real 1,42,5,9 60 free
 //
-// Arguments: brain (net or a circuit file), wiring (real, random, or signs; circuits only),
+// Arguments: brain (net, neat, or a circuit file), wiring (real, random, or signs; circuits only),
 // comma-separated seeds (default 1,42,5,9), generations (default 60),
 // weights (fixed, tuned, or free; circuits only, default fixed).
 // Every 20 generations it scores the champion over 20 fixed games. A champion's own training score is a
@@ -25,7 +26,7 @@
 // Free weights also add a sign gene per edge, starting at the real sign. A mutation flips it outright: with about
 // 56 mutations per child over 5,800 genes, each gene mutates about once per lineage in 60 generations, so a small
 // Gaussian step on a signed weight would almost never cross 0. This breaks Dale's law (one sign per neuron).
-#load "../src/Native.fs" "../src/Rng.fs" "../src/Game.fs" "../src/Brain.fs" "../src/Connectome.fs" "../src/Mind.fs" "../src/Evolution.fs"
+#load "../src/Native.fs" "../src/Rng.fs" "../src/Game.fs" "../src/Brain.fs" "../src/Connectome.fs" "../src/Neat.fs" "../src/Mind.fs" "../src/Evolution.fs"
 
 open System
 open System.IO
@@ -178,6 +179,8 @@ let tuned flips (c: Connectome.Circuit) : Evolution.Species<Connectome.Genome * 
 let train =
     match brain, weights with
     | "net", _ -> trainer Evolution.net Mind.Net
+    // One species per seed: seeds run in parallel, and NEAT's innovation registry is mutable.
+    | "neat", _ -> fun seed -> (let species = Evolution.neat () in trainer species species.Mind seed)
     | _, "fixed" ->
         let circuit = loadCircuit brain
         trainer (Evolution.connectome circuit) (fun g -> Mind.Wired(circuit, g))

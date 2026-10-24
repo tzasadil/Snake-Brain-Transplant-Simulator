@@ -28,7 +28,13 @@ let private senseColors = [| Color.wall; Color.snake; Color.fruit |]
 /// Inputs after the 24 ray inputs: fruit compass ahead and right, then snake length. See Game.vision.
 let private extraLabels = [| "fruit ↑"; "fruit →"; "length" |]
 let private extraColors = [| Color.fruit; Color.fruit; Color.snake |]
-let private outputLabels = [| "Left"; "Straight"; "Right" |]
+
+let private choiceIndex =
+    function
+    | TurnLeft -> 0
+    | Straight -> 1
+    | TurnRight -> 2
+let private outputNames = [| "Left"; "Straight"; "Right" |]
 
 /// Matches the canvas buffer to its CSS size and pixel ratio, so drawing stays sharp.
 /// Returns the context scaled to CSS pixels, with the CSS width and height.
@@ -102,6 +108,69 @@ let board (canvas: HTMLCanvasElement) (g: Game) (seen: float[]) =
         ctx.fillStyle <- !^(if i = 0 then Color.head else Color.snake)
         ctx.fillRect (float c.X * cell + inset, float c.Y * cell + inset, cell - 2.0 * inset, cell - 2.0 * inset))
 
+/// Input y positions: groups of 3 with a gap between groups. 8 rays, then compass and length, then NEAT's bias.
+let private inputLayout top usable count =
+    let gaps = (count - 1) / 3
+    let step = usable / (float count + 0.8 * float gaps)
+    step, (fun i -> top + step * (float i + 0.8 * float (i / 3)) + step * 0.5)
+
+let private inputColor i =
+    if i < 24 then senseColors[i % 3] else extraColors[i - 24]
+
+let private inputLabels (ctx: CanvasRenderingContext2D) x (inputY: int -> float) =
+    ctx.font <- "13px system-ui, sans-serif"
+    ctx.textBaseline <- "middle"
+    ctx.textAlign <- "right"
+    ctx.fillStyle <- !^Color.muted
+    rayLabels |> Array.iteri (fun r label -> ctx.fillText (label, x - 14.0, inputY (r * 3 + 1)))
+    ctx.font <- "12px system-ui, sans-serif"
+    extraLabels |> Array.iteri (fun i label -> ctx.fillText (label, x - 12.0, inputY (24 + i)))
+    ctx.font <- "13px system-ui, sans-serif"
+
+let private outputLabels (ctx: CanvasRenderingContext2D) x (outputY: int -> float) choice =
+    ctx.textAlign <- "left"
+
+    outputNames
+    |> Array.iteri (fun i label ->
+        ctx.fillStyle <- !^(if i = choice then Color.text else Color.muted)
+        ctx.fillText (label, x + 14.0, outputY i))
+
+/// A neuron lit by its level, 0 to 1, over a panel-colored disc so links behind it stay hidden.
+let private dot (ctx: CanvasRenderingContext2D) x y radius (color: string) level =
+    circle ctx x y radius
+    ctx.fillStyle <- !^Color.panel
+    ctx.fill ()
+    ctx.globalAlpha <- 0.12 + 0.88 * level
+    ctx.fillStyle <- !^color
+    ctx.fill ()
+    ctx.globalAlpha <- 1.0
+
+/// A weighted link. Color = weight sign, strength = the signal it carries right now, 0 to 1.
+let private wire (ctx: CanvasRenderingContext2D) weight signal x1 y1 x2 y2 =
+    ctx.strokeStyle <- !^(if weight >= 0.0 then Color.positive else Color.negative)
+    ctx.globalAlpha <- 0.04 + 0.8 * min 1.0 signal
+    ctx.lineWidth <- 0.5 + 1.5 * min 1.0 signal
+    line ctx x1 y1 x2 y2
+
+/// Label and value pairs along the top left, like "Turn Left". The top right holds the brain picker.
+let private caption (ctx: CanvasRenderingContext2D) (items: (string * string) list) =
+    ctx.globalAlpha <- 1.0
+    ctx.font <- "13px system-ui, sans-serif"
+    ctx.textAlign <- "left"
+    ctx.textBaseline <- "top"
+    let mutable x = 0.0
+
+    for label, value in items do
+        ctx.fillStyle <- !^Color.muted
+        ctx.fillText (label, x, 4.0)
+        x <- x + ctx.measureText(label).width + 6.0
+        ctx.fillStyle <- !^Color.text
+        ctx.fillText (value, x, 4.0)
+        x <- x + ctx.measureText(value).width + 16.0
+
+let private peak (values: float[]) =
+    values |> Array.fold (fun m v -> max m (abs v)) 1e-9
+
 /// The network. Edge color = weight sign. Edge strength = the signal it carries right now,
 /// so the picture shows which senses drive the current decision.
 let network (canvas: HTMLCanvasElement) (brain: Brain.Brain) (acts: float[][]) (choice: int) =
@@ -109,13 +178,7 @@ let network (canvas: HTMLCanvasElement) (brain: Brain.Brain) (acts: float[][]) (
     let top = 14.0
     let usable = h - 2.0 * top
     let columns = [| 70.0; w * 0.5; w - 78.0 |]
-    let inputs = acts[0].Length
-    let gaps = (inputs - 1) / 3
-    let inputStep = usable / (float inputs + 0.8 * float gaps)
-
-    // Inputs come in groups of 3, with a gap between groups: 8 rays, then compass and length.
-    let inputY i =
-        top + inputStep * (float i + 0.8 * float (i / 3)) + inputStep * 0.5
+    let inputStep, inputY = inputLayout top usable acts[0].Length
 
     let evenY n i =
         let step = usable / float n
@@ -124,9 +187,6 @@ let network (canvas: HTMLCanvasElement) (brain: Brain.Brain) (acts: float[][]) (
     let y layer i =
         if layer = 0 then inputY i else evenY acts[layer].Length i
 
-    let peak (values: float[]) =
-        values |> Array.fold (fun m v -> max m (abs v)) 1e-9
-
     for l in 0 .. brain.Length - 1 do
         let strength = peak acts[l]
 
@@ -134,10 +194,7 @@ let network (canvas: HTMLCanvasElement) (brain: Brain.Brain) (acts: float[][]) (
         |> Array.iteri (fun j weights ->
             for i in 0 .. acts[l].Length - 1 do
                 let signal = abs (acts[l][i] / strength * weights[i])
-                ctx.strokeStyle <- !^(if weights[i] >= 0.0 then Color.positive else Color.negative)
-                ctx.globalAlpha <- 0.04 + 0.8 * min 1.0 signal
-                ctx.lineWidth <- 0.5 + 1.5 * min 1.0 signal
-                line ctx columns[l] (y l i) columns[l + 1] (y (l + 1) j))
+                wire ctx weights[i] signal columns[l] (y l i) columns[l + 1] (y (l + 1) j))
 
     ctx.globalAlpha <- 1.0
     let radius = min 6.0 (inputStep * 0.42 |> max 2.5)
@@ -148,8 +205,7 @@ let network (canvas: HTMLCanvasElement) (brain: Brain.Brain) (acts: float[][]) (
         acts[l]
         |> Array.iteri (fun i v ->
             let color =
-                if l = 0 && i < 24 then senseColors[i % 3]
-                elif l = 0 then extraColors[i - 24]
+                if l = 0 then inputColor i
                 elif l = acts.Length - 1 && i = choice then Color.snake
                 else Color.text
 
@@ -157,30 +213,69 @@ let network (canvas: HTMLCanvasElement) (brain: Brain.Brain) (acts: float[][]) (
                 if l = acts.Length - 1 then (if i = choice then 1.0 else 0.15)
                 else abs v / strength
 
-            circle ctx columns[l] (y l i) radius
-            ctx.fillStyle <- !^Color.panel
-            ctx.fill ()
-            ctx.globalAlpha <- 0.12 + 0.88 * level
-            ctx.fillStyle <- !^color
-            ctx.fill ()
-            ctx.globalAlpha <- 1.0)
+            dot ctx columns[l] (y l i) radius color level)
 
-    ctx.font <- "13px system-ui, sans-serif"
-    ctx.textBaseline <- "middle"
-    ctx.textAlign <- "right"
-    ctx.fillStyle <- !^Color.muted
+    inputLabels ctx columns[0] inputY
+    outputLabels ctx columns[2] (evenY 3) choice
 
-    rayLabels |> Array.iteri (fun r label -> ctx.fillText (label, columns[0] - 14.0, inputY (r * 3 + 1)))
+/// A NEAT net: inputs left, outputs right, grown neurons in between, one column per depth.
+/// Disabled links are left out.
+let neat (canvas: HTMLCanvasElement) (net: Neat.Net) (value: float[]) (choice: int) =
+    let ctx, w, h = fit canvas
+    // Below the caption. NEAT has one more input row than the network, the bias.
+    let top = 24.0
+    let usable = h - top - 4.0
+    let left, right = 70.0, w - 78.0
+    let n = net.Ids.Length
+    let hidden = n - Neat.firstHidden
+    let inputStep, inputY = inputLayout top usable (Neat.bias + 1)
+    let deepest = net.Depth[n - 1]
+    let x i = left + (right - left) * float net.Depth[i] / float deepest
+
+    let evenY count k =
+        let step = usable / float count
+        top + step * (float k + 0.5)
+
+    // Index order is depth, then id, so each column's nodes are consecutive.
+    let y =
+        Array.init n (fun i ->
+            if i <= Neat.bias then
+                inputY i
+            elif i >= n - Neat.outputCount then
+                evenY Neat.outputCount (i - (n - Neat.outputCount))
+            else
+                let column = [| Neat.bias + 1 .. n - Neat.outputCount - 1 |] |> Array.filter (fun k -> net.Depth[k] = net.Depth[i])
+                evenY column.Length (Array.findIndex ((=) i) column))
+
+    let strength =
+        Array.init net.Source.Length (fun e -> value[net.Source[e]] * net.Weight[e]) |> peak
+
+    for j in 0 .. n - 1 do
+        for e in net.Start[j] .. net.Start[j + 1] - 1 do
+            let i = net.Source[e]
+            wire ctx net.Weight[e] (abs (value[i] * net.Weight[e]) / strength) (x i) y[i] (x j) y[j]
+
+    ctx.globalAlpha <- 1.0
+    let radius = min 6.0 (inputStep * 0.42 |> max 2.5)
+    let level = peak value[.. n - Neat.outputCount - 1]
+
+    for i in 0 .. n - 1 do
+        if i < Neat.bias then
+            dot ctx (x i) y[i] radius (inputColor i) (abs value[i] / level)
+        elif i = Neat.bias then
+            dot ctx (x i) y[i] radius Color.muted 1.0
+        elif i < n - Neat.outputCount then
+            dot ctx (x i) y[i] radius Color.text (abs value[i] / level)
+        else
+            let k = i - (n - Neat.outputCount)
+            dot ctx (x i) y[i] radius (if k = choice then Color.snake else Color.text) (if k = choice then 1.0 else 0.15)
+
+    inputLabels ctx left inputY
     ctx.font <- "12px system-ui, sans-serif"
-    extraLabels |> Array.iteri (fun i label -> ctx.fillText (label, columns[0] - 12.0, inputY (24 + i)))
+    ctx.fillText ("bias", left - 12.0, inputY Neat.bias)
     ctx.font <- "13px system-ui, sans-serif"
-
-    ctx.textAlign <- "left"
-
-    outputLabels
-    |> Array.iteri (fun i label ->
-        ctx.fillStyle <- !^(if i = choice then Color.text else Color.muted)
-        ctx.fillText (label, columns[2] + 14.0, evenY 3 i))
+    outputLabels ctx right (evenY Neat.outputCount) choice
+    caption ctx [ "Grown", string hidden; "Links", string net.Source.Length ]
 
 /// A connectome circuit at real soma positions over a faint outline: the fly brain seen from behind,
 /// so its left is on the left, or the worm from the side, head on the left.
@@ -254,34 +349,14 @@ let connectome (canvas: HTMLCanvasElement) (c: Connectome.Circuit) (h: float[]) 
             circle ctx (px n.X) (py n.Y) (radius + 3.0)
             ctx.stroke ())
 
-    ctx.globalAlpha <- 1.0
-    ctx.font <- "13px system-ui, sans-serif"
-    ctx.textAlign <- "left"
-    ctx.textBaseline <- "top"
-    ctx.fillStyle <- !^Color.muted
-    ctx.fillText ("Turn", 0.0, 4.0)
-    ctx.fillStyle <- !^Color.text
-
-    ctx.fillText (
-        (match turn with
-         | TurnLeft -> "Left"
-         | Straight -> "Straight"
-         | TurnRight -> "Right"),
-        36.0,
-        4.0
-    )
-
-let private choiceIndex =
-    function
-    | TurnLeft -> 0
-    | Straight -> 1
-    | TurnRight -> 2
+    caption ctx [ "Turn", outputNames[choiceIndex turn] ]
 
 /// Draws whichever kind of brain produced the thought.
 let thought (canvas: HTMLCanvasElement) (t: Mind.Thought) =
     match t.Activity with
     | Mind.Layers(brain, layers) -> network canvas brain layers (choiceIndex t.Turn)
     | Mind.Neurons(circuit, h) -> connectome canvas circuit h t.Turn
+    | Mind.Graph(net, value) -> neat canvas net value (choiceIndex t.Turn)
 
 /// Generation x position on the chart. Bars keep a minimum width until history outgrows it.
 let private slots count = max count 60

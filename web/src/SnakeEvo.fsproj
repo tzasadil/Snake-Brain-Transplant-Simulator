@@ -10,6 +10,7 @@
     <Compile Include="Game.fs" />
     <Compile Include="Brain.fs" />
     <Compile Include="Connectome.fs" />
+    <Compile Include="Neat.fs" />
     <Compile Include="Mind.fs" />
     <Compile Include="Evolution.fs" />
     <Compile Include="Protocol.fs" />

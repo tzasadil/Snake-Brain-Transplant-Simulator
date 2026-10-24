@@ -121,6 +121,26 @@ let tests =
               Expect.equal alone[1] 0.0 "without the gap junction it stays silent"
           }
 
+          test "NEAT links always point forward, however the genomes grow" {
+              // A cycle would make the net unevaluable. Disabled links count too: crossover can re-enable them.
+              let rng = Rng.Source 3u
+              let innovations = Neat.Innovations()
+              let pool = Array.init 20 (fun _ -> Neat.random rng)
+
+              for _ in 1..3000 do
+                  let child = Neat.crossover innovations rng pool[rng.Int 20] pool[rng.Int 20]
+                  let net = Neat.compile child
+
+                  for j in 0 .. net.Ids.Length - 1 do
+                      for e in net.Start[j] .. net.Start[j + 1] - 1 do
+                          Expect.isLessThan net.Source[e] j "link points forward"
+
+                  pool[rng.Int 20] <- child
+
+              let grown = pool |> Array.map (fun g -> (Neat.compile g).Ids.Length - Neat.firstHidden) |> Array.max
+              Expect.isGreaterThan grown 2 "genomes grew hidden neurons"
+          }
+
           test "the snake starves without fruit" {
               let g = { place [ cell 5 5 ] North (cell 0 0) rng with Hunger = starveAfter 0 }
 
