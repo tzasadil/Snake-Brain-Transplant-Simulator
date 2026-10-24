@@ -35,13 +35,11 @@ let neat () =
 type Champion<'G> =
     { Generation: int
       Brain: 'G
-      /// Replaying the brain with this seed reproduces the exact game that won the generation.
-      Seed: uint32
+      /// Score of its first training game. The page plays the brain on fresh games, which score differently.
       Score: int }
 
 type private Result<'G> =
     { Brain: 'G
-      Seed: uint32
       Score: int
       Fitness: float }
 
@@ -118,7 +116,6 @@ type Trainer<'G>(seed: uint32, species: Species<'G>) =
         let champion =
             { Generation = generation
               Brain = best.Brain
-              Seed = best.Seed
               Score = best.Score }
 
         generation <- generation + 1
@@ -129,7 +126,7 @@ type Trainer<'G>(seed: uint32, species: Species<'G>) =
 
     /// Plays games while `hasTime ()` holds. Returns the champions of the generations it finished.
     /// Every game gets a fresh seed, so elites face new fruit and the best score can drop, like the original.
-    /// Fitness averages 2 games to cut the luck of fruit placement. The first game is the one a replay shows.
+    /// Fitness averages 2 games to cut the luck of fruit placement. The first game's score is the chart's.
     member _.Train(hasTime: unit -> bool) =
         let champions = ResizeArray<Champion<'G>>()
 
@@ -142,7 +139,6 @@ type Trainer<'G>(seed: uint32, species: Species<'G>) =
 
             results.Add
                 { Brain = brain
-                  Seed = seed
                   Score = score
                   Fitness = (fitness + second) / 2.0 }
 

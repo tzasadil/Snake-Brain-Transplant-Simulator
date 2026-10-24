@@ -1,4 +1,4 @@
-/// Seeded random numbers. xorshift32 is pure and tiny, so a champion's game replays from its seed alone.
+/// Seeded random numbers. xorshift32 is pure and tiny, so a seed alone fixes a whole game.
 module SnakeEvo.Rng
 
 /// xorshift32 state. Never 0, because xorshift maps 0 to itself forever.

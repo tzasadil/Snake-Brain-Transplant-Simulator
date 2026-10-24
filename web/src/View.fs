@@ -361,7 +361,7 @@ let thought (canvas: HTMLCanvasElement) (t: Mind.Thought) =
 /// Generation x position on the chart. Bars keep a minimum width until history outgrows it.
 let private slots count = max count 60
 
-/// Best score per generation, unlabeled. The replayed generation is highlighted, the hovered one brightened and labeled.
+/// Best score per generation, unlabeled. The generation on the board is highlighted, the hovered one brightened and labeled.
 let chart (canvas: HTMLCanvasElement) (champions: Champion<_>[]) (current: int option) (hovered: int option) =
     let ctx, w, h = fit canvas
     let plotH = h - 26.0

@@ -186,7 +186,7 @@ type Net =
       Weight: float[] }
 
 /// Orders nodes so every link points forward. Ties break by node id, and sums run in genome order,
-/// so the page rebuilds exactly the net the worker trained, and replays match bit for bit.
+/// so the page rebuilds exactly the net the worker trained, and it makes the same moves.
 let compile (genome: Genome) : Net =
     let enabled = genome |> Array.filter (fun l -> l.Enabled)
     let hidden = nodesOf genome |> Array.filter (fun id -> id >= firstHidden) |> Array.sort

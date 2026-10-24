@@ -12,7 +12,7 @@ A Snake game in F# where a genetic algorithm evolves neural networks that learn 
 - **Senses**: the snake looks in 8 directions and measures the distance to the nearest wall, its own body, and fruit (24 inputs). The view rotates with the snake, so "left" always means the snake's left. The browser version adds a fruit compass (fruit offset ahead and to the right) and the snake's length, 27 inputs in total.
 - **Brain**: a small multi-layer perceptron, 24 -> 18 -> 3 neurons with ReLU. The 3 outputs are turn left, go straight, and turn right.
 - **Evolution**: 100 snakes play one game each in parallel. The two best survive unchanged (elitism). Fitter snakes are more likely to be picked as parents. Children mix parent weights at random, then mutate a few of them. The browser version mutates with Gaussian noise and averages 2 games per snake, with the score cut when the snake turns one way more than 3:1, plus partial credit (less than one fruit) for moving toward the fruit, so a population that has not eaten yet still has something to select on.
-- **Browser**: the same rules, compiled to JavaScript with Fable. Training runs in a Web Worker. The page replays each generation's best game and shows which neurons drive each move.
+- **Browser**: the same rules, compiled to JavaScript with Fable. Training runs in a Web Worker. The page plays each generation's best snake on a fresh random game and shows which neurons drive each move.
 - **NEAT mode** (browser): evolution grows the network, as in NEAT (Stanley and Miikkulainen 2002). Every snake starts with its senses wired straight to the 3 outputs. A child can add a link or split a link into a new neuron. Links are matched by their two endpoints instead of NEAT's innovation numbers, and there is no speciation. In short tests it reached about 23 fruit per game by generation 60, against 20 for the fixed network (4 seeds). A control that never grows, with only the weights of the direct wiring evolving, did as well: 27 at generation 60 and 35 at generation 140, the same as full NEAT. So the grown neurons do not help yet. NEAT usually protects new structure with speciation, which this version lacks.
 - **Fruit fly mode** (browser): a real fly brain circuit plays instead of the network. A script extracts 251 neurons and 2,249 synapse bundles from the male fruit fly connectome. It keeps whole paths: the strongest routes from visual projection neurons to the steering neurons DNa01 and DNa02, where a path's strength is the product of each connection's share of its target's input. After each pick it weakens that path's connections, so later picks find new routes (262 paths). Visual neurons wired straight onto steering are left out, so every signal crosses the brain. Wiring, signs, and synapse counts stay fixed. Evolution tunes only how the snake's senses feed the visual neurons, plus a gain and threshold per neuron, as in [ChessFly](https://huggingface.co/mlabonne/chessfly). The snake turns toward the side whose steering neurons fire more. In short tests it reached about 11 fruit per game by generation 60 (36 seeds). A random circuit of the same size learned about as well (12), so the evolved encoder and gains do most of the work, not the fly's wiring. Letting evolution also tune each synapse's strength helped both circuits about equally (14 real, 13 random), so the wiring still shows no advantage. Letting it flip synapse signs as well did not help (10, 12 seeds).
 - **Worm mode** (browser): the whole nervous system of the roundworm C. elegans plays: 299 neurons, 1,922 chemical synapses, and 1,079 gap junctions. The snake's senses feed 36 head sensory neurons, and the snake turns toward whichever head motor neurons fire more, dorsal (SMDD, RMDD) for left or ventral (SMDV, RMDV) for right, as the worm steers by bending its head. Signs come from each neuron's transmitter: GABA inhibits, acetylcholine and glutamate excite. Evolution tunes the same encoder, gains, and thresholds as in fruit fly mode. It learns from scratch, unevenly. Without the partial credit for approaching fruit, some populations never ate, so selection was blind and they stayed stuck. With it, 4 test runs reached 11 to 18 fruit per game by generation 60. Restart draws a new population.
@@ -44,10 +44,10 @@ Needs the .NET 10 SDK and Node.js with pnpm.
 | Control | Action |
 |---|---|
 | `Brain` | Fruit fly (default), worm, neural net, or NEAT. Switching restarts training. |
-| Score chart | Replay the best game of that generation. Arrow keys work too. |
+| Score chart | Training score of each generation's best snake. Click to watch it play a new game. Arrow keys work too. |
 | `Pause` / `Resume` | Stop or continue training. It also pauses every 300 generations. |
 | `Follow latest` | Each new champion takes over the game in progress |
-| `Speed` | Replay speed |
+| `Speed` | Playback speed |
 | `Restart` | Train a new random population |
 
 ### Desktop
@@ -90,7 +90,7 @@ Windows only (.NET Framework 4.8, WPF).
 | `web/tools/source-data/` | Raw connectome downloads, gitignored. The extraction scripts list their sources. |
 | `web/src/Worker.fs` | Trains off the main thread |
 | `web/src/View.fs` | Draws the board, the network, and the score chart |
-| `web/src/App.fs` | Replay loop and page controls |
+| `web/src/App.fs` | Playback loop and page controls |
 
 [Architecture diagram](https://drive.google.com/file/d/1WRbTG-MDYLCUJCyy3G-27LuXoD9cK_V1/view?usp=sharing)
 

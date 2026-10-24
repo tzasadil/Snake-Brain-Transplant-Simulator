@@ -15,7 +15,7 @@ let private alive =
 let tests =
     testList
         "snake"
-        [ test "a champion replays its exact game" {
+        [ test "the same brain and seed play the same game" {
               let brain = Brain.random (Rng.Source 7u)
               let mind = Mind.Net brain
               Expect.equal (Evolution.trial mind 12345u) (Evolution.trial mind 12345u) "same brain and seed"

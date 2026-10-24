@@ -1,4 +1,4 @@
-/// Wires the training worker, replay, and the page controls together.
+/// Wires the training worker, playback, and the page controls together.
 module SnakeEvo.App
 
 open Browser.Dom
@@ -36,7 +36,7 @@ let private startWorker () : TrainingWorker = jsNative
 /// Training pauses every this many generations, so an idle tab stops burning CPU. Resume continues.
 let private pauseEvery = 300
 
-/// Pause after a replay ends, so the death is visible.
+/// Pause after a game ends, so the death is visible.
 let private endHoldMs = 1200.0
 
 type private Training =
@@ -47,7 +47,7 @@ type private Training =
 
 type private CircuitData =
     | Loading
-    /// The raw text goes to the worker, the parsed circuit stays here for replays.
+    /// The raw text goes to the worker, the parsed circuit stays here for playback.
     | Ready of text: string * Connectome.Circuit
     | Unavailable
 
@@ -144,8 +144,10 @@ let private circuit () =
 
 let private moveMs () = 160.0 / float speedSelect.value
 
+/// A fresh random game, not the one the champion won in training. Its training game was a lucky draw,
+/// so a fresh game shows how the brain really plays.
 let private begin' (c: Champion<Mind.Mind>) =
-    let g = Game.start c.Seed
+    let g = Game.start (newSeed ())
 
     Playing
         { Champion = c
@@ -298,7 +300,7 @@ let rec private frame (t: float) =
     render ()
     window.requestAnimationFrame frame |> ignore
 
-/// Replays a chosen generation now and stops following the latest.
+/// Plays a chosen generation now and stops following the latest.
 let private select gen =
     if gen >= 1 && gen <= champions.Count then
         pick <- Fixed gen

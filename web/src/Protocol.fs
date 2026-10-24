@@ -26,7 +26,7 @@ type WiredGenes =
        Threshold: float[] |}
 
 /// NEAT links as parallel arrays, in genome order. Compiling sums links in that order, so keeping it makes
-/// the page's replay match the worker's game exactly.
+/// the page's net move exactly like the worker's.
 type NeatGenes =
     {| From: int[]
        To: int[]
@@ -38,7 +38,6 @@ type NeatGenes =
 type Report =
     {| Run: int
        Generation: int
-       Seed: uint32
        Score: int
        Net: float[][][] option
        Wired: WiredGenes option
@@ -47,7 +46,6 @@ type Report =
 let private report run (c: Champion<_>) net wired neat : Report =
     {| Run = run
        Generation = c.Generation
-       Seed = c.Seed
        Score = c.Score
        Net = net
        Wired = wired
@@ -112,7 +110,6 @@ let champion (circuit: Connectome.Circuit option) (r: Report) : Champion<Mind> o
     |> Option.map (fun m ->
         { Generation = r.Generation
           Brain = m
-          Seed = r.Seed
           Score = r.Score })
 
 /// Parses a circuit file (web/data/*-circuit.json, see web/tools). Shape checks here, index checks in Connectome.build.

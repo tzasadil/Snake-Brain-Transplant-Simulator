@@ -41,7 +41,7 @@ type Circuit =
       /// Soma positions sampled from the whole brain, flat x, y pairs. Only drawn, never simulated.
       Cloud: float[]
       /// Update steps per snake move: the longest input-to-steering path the extraction kept.
-      /// Activity resets each move, so the same position always gives the same turn and replays stay exact.
+      /// Activity resets each move, so the same position always gives the same turn.
       Steps: int }
 
 type Genome =
