@@ -1,28 +1,167 @@
 # Snake Brain Transplant Simulator
 
-A Snake game in F# where a genetic algorithm evolves neural networks that learn to play it. You can play yourself, train a population, or watch the best snake of any past generation.
+A Snake game in F# with swappable brains: evolved neural networks, real fruit fly and worm circuits, readable rule programs, and brains that learn while they play. Watch any brain learn, or watch the best snake of any past generation.
 
 **[Watch it evolve in your browser](https://tzasadil.github.io/Snake-Brain-Transplant-Simulator/)**
 
 ![Generation 1 starves, then generation 74 hunts fruit while its network lights up](docs/demo.gif)
 
-## How it works
+## Brains
 
-- **Game**: 10x10 grid. The snake grows when it eats fruit and dies when it hits a wall or itself. It also starves if it goes too long without food, so a network cannot score by circling forever.
-- **Senses**: the snake looks in 8 directions and measures the distance to the nearest wall, its own body, and fruit (24 inputs). The view rotates with the snake, so "left" always means the snake's left. The browser version adds a fruit compass (fruit offset ahead and to the right) and the snake's length, 27 inputs in total.
-- **Brain**: a small multi-layer perceptron, 24 -> 18 -> 3 neurons with ReLU. The 3 outputs are turn left, go straight, and turn right.
-- **Evolution**: 100 snakes play one game each in parallel. The two best survive unchanged (elitism). Fitter snakes are more likely to be picked as parents. Children mix parent weights at random, then mutate a few of them. The browser version mutates with Gaussian noise and averages 2 games per snake, with the score cut when the snake turns one way more than 3:1, plus partial credit (less than one fruit) for moving toward the fruit, so a population that has not eaten yet still has something to select on.
-- **Browser**: the same rules, compiled to JavaScript with Fable. Training runs in a Web Worker. The page plays each generation's best snake on a fresh random game and shows which neurons drive each move.
-- **NEAT mode** (browser): evolution grows the network, as in NEAT (Stanley and Miikkulainen 2002). Every snake starts with its senses wired straight to the 3 outputs. A child can add a link or split a link into a new neuron. Links are matched by their two endpoints instead of NEAT's innovation numbers, and there is no speciation.
-- **Program tree mode** (browser): genetic programming. The brain is a readable decision tree of tests such as "blocked ahead?" or "fruit to the left?", ending in moves. Children swap branches between parents, rewrite single tests or moves, or wrap a branch in a new test. Trees stay at most 4 tests deep, so they fit the panel, and tests that cannot change the move are pruned. The view lights the tests on the way to the current move.
-- **Q-table mode** (browser): reinforcement learning, no evolution. One snake learns while it plays. It knows only danger to its left, ahead, and right, and which way the fruit is: 64 situations with 3 moves each. After every move it nudges that move's value toward the reward plus the best value of the next situation (Q-learning). Fruit is worth +1, death -1, a step toward the fruit +0.1, and a step away -0.1. 5% of moves are random, so it keeps exploring. After each game, a frozen copy plays one test game: that is one bar on the chart, and the board plays these copies. The view shows the move the table would pick in every cell.
-- **Spiking + dopamine mode** (browser): spiking neurons that learn during play, no evolution. The senses drive 29 input neurons by firing rate. These feed 40 leaky integrate-and-fire hidden neurons over fixed random wiring, and inputs and hidden neurons both feed 3 output neurons. Each move runs 20 time steps, and the move is the output that fires most. Every synapse onto an output keeps a fading trace of recent activity. Fruit, death, and steps toward or away from the fruit release a dopamine-like signal: above its running average it strengthens traced synapses, below it weakens them. The rule is REINFORCE (Williams 1992) over spike counts, not spike-timing plasticity. While learning, the snake picks its move at random, weighted by how strongly each output fires. The view is a scrolling spike raster of the last 10 moves.
-- **Hamiltonian cycle mode** (browser): no learning, a classic algorithm for comparison. The page builds a random cycle through every cell exactly once and numbers the cells along it. The snake follows the cycle, but it may jump to the neighboring cell furthest along it, as long as the jump passes neither the fruit nor the tail. The body then always lies in cycle order, so the snake never hits itself. `New cycle` draws another cycle.
-- **Fruit fly mode** (browser): a real fly brain circuit plays instead of the network. A script extracts 251 neurons and 2,249 synapse bundles from the male fruit fly connectome. It keeps whole paths: the strongest routes from visual projection neurons to the steering neurons DNa01 and DNa02, where a path's strength is the product of each connection's share of its target's input. After each pick it weakens that path's connections, so later picks find new routes (262 paths). Visual neurons wired straight onto steering are left out, so every signal crosses the brain. Wiring, signs, and synapse counts stay fixed. Evolution tunes only how the snake's senses feed the visual neurons, plus a gain and threshold per neuron, as in [ChessFly](https://huggingface.co/mlabonne/chessfly). The snake turns toward the side whose steering neurons fire more.
-- **Worm mode** (browser): the whole nervous system of the roundworm C. elegans plays: 299 neurons, 1,922 chemical synapses, and 1,079 gap junctions. The snake's senses feed 36 head sensory neurons, and the snake turns toward whichever head motor neurons fire more, dorsal (SMDD, RMDD) for left or ventral (SMDV, RMDV) for right, as the worm steers by bending its head. Signs come from each neuron's transmitter: GABA inhibits, acetylcholine and glutamate excite. Evolution tunes the same encoder, gains, and thresholds as in fruit fly mode. Restart draws a new population.
-- **Desktop GUI**: WPF in strict MVVM. `PropertyChanged.Fody` injects `INotifyPropertyChanged`, so the view models stay plain F#.
+| Brain | Learns by | What changes | Brain panel |
+|---|---|---|---|
+| Fruit fly (default) | Evolution | How senses feed a real fly circuit | Circuit at real neuron positions |
+| Worm | Evolution | How senses feed the whole worm nervous system | Worm nervous system, side view |
+| Neural net | Evolution | All weights | Network, links lit by signal |
+| NEAT | Evolution | Weights, plus new links and neurons | Network as it grows |
+| Program tree | Evolution | Readable if/else rules | Rules, with the active path lit |
+| Q-table | Learning during play | Value of each move in each situation | Best move in every cell |
+| Spiking + dopamine | Learning during play | Synapses onto the output neurons | Scrolling spike raster |
+| Hamiltonian cycle | Nothing, a fixed algorithm | Nothing | Numbered cycle and next move |
 
-How well each mode learns, and the controls behind those claims: [experiment reports](docs/experiment-reports.md).
+How well each brain learns, with the controls behind each claim: [experiment reports](docs/experiment-reports.md).
+
+## The game
+
+- **Board**: 10x10 grid.
+- **Death**: hitting a wall or itself.
+- **Starving**: too many moves without fruit also kills, so a brain cannot score by circling forever.
+- **Moves**: turn left, go straight, or turn right.
+
+| Senses | Inputs |
+|---|---|
+| Distance to wall, own body, and fruit along 8 rays | 24 |
+| Fruit compass: fruit offset ahead and to the right | 2 (browser only) |
+| Snake length | 1 (browser only) |
+
+The rays rotate with the snake, so "left" always means the snake's left.
+
+## Evolution
+
+Used by the fruit fly, worm, neural net, NEAT, and program tree.
+
+- **Population**: 100 snakes play one game each, in parallel.
+- **Elitism**: the 2 best survive unchanged.
+- **Parents**: fitter snakes are more likely to be picked.
+- **Children**: mix their parents' genes at random, then mutate a few.
+
+The browser version adds:
+
+| Change | Why |
+|---|---|
+| Gaussian mutation | A fixed step of 0.02 was too weak to tune new inputs |
+| 2 games per snake | Cuts the luck of fruit placement |
+| Score cut when one turn side exceeds 3:1 | Otherwise populations learn to turn one way only |
+| Partial credit for moving toward the fruit, less than one fruit | A population that has not eaten yet still has something to select on |
+
+## Learning during play
+
+Used by the Q-table and spiking + dopamine.
+
+- One snake learns after every move. There is no population.
+- After each game, a frozen copy plays one test game. That copy is one bar on the chart, and the board plays these copies.
+- So the chart counts games learned instead of generations.
+
+| Event | Reward |
+|---|---|
+| Eat fruit | +1 |
+| Die | -1 |
+| Step toward the fruit | +0.1 |
+| Step away from the fruit | -0.1 |
+| Starve | None: the game ends before the move happens |
+
+## In the browser
+
+- **Same rules**: compiled from F# to JavaScript with Fable.
+- **Training**: runs in a Web Worker, so playback never stutters.
+- **Board**: plays each generation's best snake on a fresh random game.
+- **Brain panel**: shows what drives each move.
+
+## Each brain
+
+### Neural net
+
+- A multi-layer perceptron with ReLU: 24 -> 18 -> 3 neurons, 27 -> 18 -> 3 in the browser.
+- Evolution tunes every weight.
+
+### NEAT
+
+As in NEAT (Stanley and Miikkulainen 2002).
+
+- Every snake starts with its senses wired straight to the 3 outputs.
+- A child can add a link, or split a link into a new neuron.
+- Links are matched by their two endpoints instead of NEAT's innovation numbers.
+- No speciation.
+
+### Program tree
+
+Genetic programming.
+
+- The brain is a decision tree of tests such as "blocked ahead?" or "fruit to the left?", ending in moves.
+- Children swap branches between parents, rewrite single tests or moves, or wrap a branch in a new test.
+- At most 4 tests deep, so a tree fits the panel. Tests that cannot change the move are pruned.
+
+### Fruit fly
+
+A real fly brain circuit from the male fruit fly connectome.
+
+| Part | Count |
+|---|---|
+| Neurons | 251 |
+| Synapse bundles | 2,249 |
+| Paths from visual neurons to steering | 262 |
+
+- **Extraction**: keeps the strongest routes from visual projection neurons to the steering neurons DNa01 and DNa02. A path's strength is the product of each connection's share of its target's input. After each pick it weakens that path's connections, so later picks find new routes.
+- **No shortcuts**: visual neurons wired straight onto steering are left out, so every signal crosses the brain.
+- **Fixed**: wiring, signs, and synapse counts.
+- **Evolved**: how the snake's senses feed the visual neurons, plus a gain and threshold per neuron, as in [ChessFly](https://huggingface.co/mlabonne/chessfly).
+- **Steering**: the snake turns toward the side whose steering neurons fire more.
+
+### Worm
+
+The whole nervous system of the roundworm C. elegans.
+
+| Part | Count |
+|---|---|
+| Neurons | 299 |
+| Chemical synapses | 1,922 |
+| Gap junctions | 1,079 |
+| Head sensory neurons fed by the senses | 36 |
+
+- **Steering**: the snake turns toward whichever head motor neurons fire more: dorsal (SMDD, RMDD) for left, ventral (SMDV, RMDV) for right, as the worm steers by bending its head.
+- **Signs**: from each neuron's transmitter. GABA inhibits, acetylcholine and glutamate excite.
+- **Evolved**: the same encoder, gains, and thresholds as the fruit fly.
+
+### Q-table
+
+Q-learning.
+
+- **Situation**: danger to the left, ahead, and right, plus which way the fruit is. 64 situations, 3 moves each.
+- **Update**: after every move, that move's value moves toward the reward plus the best value of the next situation.
+- **Exploring**: 5% of moves are random.
+- **Panel**: the move the table would pick in every cell.
+
+### Spiking + dopamine
+
+| Layer | Neurons |
+|---|---|
+| Input, driven by the senses at a firing rate | 29 |
+| Hidden, leaky integrate-and-fire, fixed random wiring | 40 |
+| Output: left, straight, right | 3 |
+
+- **Move**: each move runs 20 time steps. The move is the output that fires most.
+- **Trace**: every synapse onto an output keeps a fading trace of recent activity.
+- **Dopamine**: the reward, minus its running average. Above it strengthens traced synapses, below it weakens them.
+- **Rule**: REINFORCE (Williams 1992) over spike counts, not spike-timing plasticity.
+- **Exploring**: while learning, the move is picked at random, weighted by how strongly each output fires.
+
+### Hamiltonian cycle
+
+No learning, a classic algorithm for comparison.
+
+- **Cycle**: a random path through every cell exactly once, back to the start. The cells are numbered along it.
+- **Moves**: follow the cycle, but jump to the neighboring cell furthest along it, if the jump passes neither the fruit nor the tail.
+- **Safety**: the body always lies in cycle order, so the snake never hits itself.
 
 ## What I learned
 
@@ -60,7 +199,7 @@ Needs the .NET 10 SDK and Node.js with pnpm.
 
 ### Desktop
 
-Windows only (.NET Framework 4.8, WPF).
+Windows only (.NET Framework 4.8, WPF), in strict MVVM. `PropertyChanged.Fody` injects `INotifyPropertyChanged`, so the view models stay plain F#.
 
 1. Open `snake_Fs.sln` in Visual Studio.
 2. Restore NuGet packages.
@@ -77,6 +216,8 @@ Windows only (.NET Framework 4.8, WPF).
 
 ## Code map
 
+### Desktop
+
 | File | Role |
 |---|---|
 | `GameManager.fs` | Game loop, collisions, and the 8-ray vision |
@@ -85,24 +226,34 @@ Windows only (.NET Framework 4.8, WPF).
 | `Settings.fs` | Grid size, network shape, and mutation rates |
 | `MainWindow.xaml.fs` | View model and commands |
 | `ExampleSnake.fs` | A pretrained snake, noted for its jiggly style |
-| `web/src/Game.fs` | Browser port of the rules and vision, as pure functions |
-| `web/src/Brain.fs` | Browser port of the network, crossover, and mutation |
-| `web/src/Evolution.fs` | Browser port of selection and the training loop |
-| `web/src/Connectome.fs` | Fly and worm circuits: wiring, gap junctions, neuron dynamics, steering readout, and genome |
-| `web/src/Neat.fs` | NEAT: growing genomes, crossover by link, and compiling a genome for fast play |
-| `web/src/Program.fs` | Program trees: tests, evaluation, crossover, mutation, and the flat form sent to the page |
-| `web/src/Hamilton.fs` | Random Hamiltonian cycles and the shortcut rule |
-| `web/src/QTable.fs` | Q-learning: situations, values, and the update after each move |
-| `web/src/Spiking.fs` | Spiking neurons, dopamine, and the trace that links them |
-| `web/src/Mind.fs` | Every kind of brain behind one interface |
-| `web/tools/extract_fly.py` | Builds `web/data/fly-circuit.json` from the connectome download |
-| `web/tools/extract_worm.py` | Builds `web/data/worm-circuit.json` from OpenWorm data |
-| `web/tools/experiment.fsx` | Short learning runs on .NET, with random-wiring, shuffled-sign, and tunable-weight controls |
-| `web/tools/check-page.mjs` | Headless Chrome check: trains a brain, samples stats, screenshots, reports errors |
-| `web/tools/source-data/` | Raw connectome downloads, gitignored. The extraction scripts list their sources. |
-| `web/src/Worker.fs` | Trains off the main thread |
-| `web/src/View.fs` | Draws the board, the network, and the score chart |
-| `web/src/App.fs` | Playback loop and page controls |
+
+### Browser, in `web/src/`
+
+| File | Role |
+|---|---|
+| `Game.fs` | Rules and vision, as pure functions |
+| `Brain.fs` | Network, crossover, and mutation |
+| `Connectome.fs` | Fly and worm circuits: wiring, gap junctions, neuron dynamics, steering readout, and genome |
+| `Neat.fs` | NEAT: growing genomes, crossover by link, and compiling a genome for fast play |
+| `Program.fs` | Program trees: tests, evaluation, crossover, mutation, and the flat form sent to the page |
+| `Hamilton.fs` | Random Hamiltonian cycles and the shortcut rule |
+| `QTable.fs` | Q-learning: situations, values, and the update after each move |
+| `Spiking.fs` | Spiking neurons, dopamine, and the trace that links them |
+| `Mind.fs` | Every kind of brain behind one interface |
+| `Evolution.fs` | Selection and the training loop, and the loop for brains that learn during play |
+| `Worker.fs` | Trains off the main thread |
+| `View.fs` | Draws the board, every brain panel, and the score chart |
+| `App.fs` | Playback loop and page controls |
+
+### Tools, in `web/tools/`
+
+| File | Role |
+|---|---|
+| `extract_fly.py` | Builds `web/data/fly-circuit.json` from the connectome download |
+| `extract_worm.py` | Builds `web/data/worm-circuit.json` from OpenWorm data |
+| `experiment.fsx` | Short learning runs on .NET, with random-wiring, shuffled-sign, and tunable-weight controls |
+| `check-page.mjs` | Headless Chrome check: trains a brain, samples stats, screenshots, reports errors |
+| `source-data/` | Raw connectome downloads, gitignored. The extraction scripts list their sources. |
 
 [Architecture diagram](https://drive.google.com/file/d/1WRbTG-MDYLCUJCyy3G-27LuXoD9cK_V1/view?usp=sharing)
 
