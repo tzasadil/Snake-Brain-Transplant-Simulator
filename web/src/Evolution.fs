@@ -74,7 +74,7 @@ let trial (mind: Mind) seed =
            | Game.Alive _ -> true
            | _ -> false) do
         let g = Game.state step
-        let turn = (think mind (Game.vision g)).Turn
+        let turn = (think mind g).Turn
 
         match turn with
         | Game.TurnLeft -> lefts <- lefts + 1

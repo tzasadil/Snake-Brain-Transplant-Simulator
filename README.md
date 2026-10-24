@@ -15,6 +15,7 @@ A Snake game in F# where a genetic algorithm evolves neural networks that learn 
 - **Browser**: the same rules, compiled to JavaScript with Fable. Training runs in a Web Worker. The page plays each generation's best snake on a fresh random game and shows which neurons drive each move.
 - **NEAT mode** (browser): evolution grows the network, as in NEAT (Stanley and Miikkulainen 2002). Every snake starts with its senses wired straight to the 3 outputs. A child can add a link or split a link into a new neuron. Links are matched by their two endpoints instead of NEAT's innovation numbers, and there is no speciation. In short tests it reached about 23 fruit per game by generation 60, against 20 for the fixed network (4 seeds). A control that never grows, with only the weights of the direct wiring evolving, did as well: 27 at generation 60 and 35 at generation 140, the same as full NEAT. So the grown neurons do not help yet. NEAT usually protects new structure with speciation, which this version lacks.
 - **Program tree mode** (browser): genetic programming. The brain is a readable decision tree of tests such as "blocked ahead?" or "fruit to the left?", ending in moves. Children swap branches between parents, rewrite single tests or moves, or wrap a branch in a new test. Trees stay at most 4 tests deep, so they fit the panel, and tests that cannot change the move are pruned. The view lights the tests on the way to the current move. Without a direct "blocked" test, trees chased fruit but ran into their own body. With it, and with a mutation that wraps a branch in a new test, they reached about 15 fruit by generation 60, against 12 to 13 with either one alone (4 seeds).
+- **Hamiltonian cycle mode** (browser): no learning, a classic algorithm for comparison. The page builds a random cycle through every cell exactly once and numbers the cells along it. The snake follows the cycle, but it may jump to the neighboring cell furthest along it, as long as the jump passes neither the fruit nor the tail. The body then always lies in cycle order, so the snake never hits itself. In 200 test games it filled the board every time, in about 2,300 moves. `New cycle` draws another cycle.
 - **Fruit fly mode** (browser): a real fly brain circuit plays instead of the network. A script extracts 251 neurons and 2,249 synapse bundles from the male fruit fly connectome. It keeps whole paths: the strongest routes from visual projection neurons to the steering neurons DNa01 and DNa02, where a path's strength is the product of each connection's share of its target's input. After each pick it weakens that path's connections, so later picks find new routes (262 paths). Visual neurons wired straight onto steering are left out, so every signal crosses the brain. Wiring, signs, and synapse counts stay fixed. Evolution tunes only how the snake's senses feed the visual neurons, plus a gain and threshold per neuron, as in [ChessFly](https://huggingface.co/mlabonne/chessfly). The snake turns toward the side whose steering neurons fire more. In short tests it reached about 11 fruit per game by generation 60 (36 seeds). A random circuit of the same size learned about as well (12), so the evolved encoder and gains do most of the work, not the fly's wiring. Letting evolution also tune each synapse's strength helped both circuits about equally (14 real, 13 random), so the wiring still shows no advantage. Letting it flip synapse signs as well did not help (10, 12 seeds).
 - **Worm mode** (browser): the whole nervous system of the roundworm C. elegans plays: 299 neurons, 1,922 chemical synapses, and 1,079 gap junctions. The snake's senses feed 36 head sensory neurons, and the snake turns toward whichever head motor neurons fire more, dorsal (SMDD, RMDD) for left or ventral (SMDV, RMDV) for right, as the worm steers by bending its head. Signs come from each neuron's transmitter: GABA inhibits, acetylcholine and glutamate excite. Evolution tunes the same encoder, gains, and thresholds as in fruit fly mode. It learns from scratch, unevenly. Without the partial credit for approaching fruit, some populations never ate, so selection was blind and they stayed stuck. With it, 4 test runs reached 11 to 18 fruit per game by generation 60. Restart draws a new population.
 - **Desktop GUI**: WPF in strict MVVM. `PropertyChanged.Fody` injects `INotifyPropertyChanged`, so the view models stay plain F#.
@@ -44,12 +45,13 @@ Needs the .NET 10 SDK and Node.js with pnpm.
 
 | Control | Action |
 |---|---|
-| `Brain` | Fruit fly (default), worm, neural net, NEAT, or program tree. Switching restarts training. |
+| `Brain` | Fruit fly (default), worm, neural net, NEAT, program tree, or Hamiltonian cycle. Switching restarts training. |
 | Score chart | Training score of each generation's best snake. Click to watch it play a new game. Arrow keys work too. |
 | `Pause` / `Resume` | Stop or continue training. It also pauses every 300 generations. |
 | `Follow latest` | Each new champion takes over the game in progress |
 | `Speed` | Playback speed |
 | `Restart` | Train a new random population |
+| `New cycle` | Hamiltonian cycle mode only, which does not train: draw a new cycle |
 
 ### Desktop
 
@@ -84,6 +86,7 @@ Windows only (.NET Framework 4.8, WPF).
 | `web/src/Connectome.fs` | Fly and worm circuits: wiring, gap junctions, neuron dynamics, steering readout, and genome |
 | `web/src/Neat.fs` | NEAT: growing genomes, crossover by link, and compiling a genome for fast play |
 | `web/src/Program.fs` | Program trees: tests, evaluation, crossover, mutation, and the flat form sent to the page |
+| `web/src/Hamilton.fs` | Random Hamiltonian cycles and the shortcut rule |
 | `web/src/Mind.fs` | Every kind of brain behind one interface |
 | `web/tools/extract_fly.py` | Builds `web/data/fly-circuit.json` from the connectome download |
 | `web/tools/extract_worm.py` | Builds `web/data/worm-circuit.json` from OpenWorm data |

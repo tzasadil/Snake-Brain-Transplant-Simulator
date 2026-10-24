@@ -10,7 +10,8 @@ open SnakeEvo.Mind
 
 /// Desired worker state, sent whole. Each order is idempotent, so no command can arrive out of context.
 /// A new Run starts a fresh population from Seed.
-/// Species is "net", "neat", "program", or "circuit". A string, because structured clone would break a union.
+/// Species is "net", "neat", "program", "circuit", or "none". None stops training: the Hamiltonian cycle
+/// mode does not learn. A string, because structured clone would break a union.
 /// Circuit holds the connectome JSON in fruit fly and worm modes. The page already loaded and validated it,
 /// so the worker needs no fetch and no error path of its own. Up to 100 KB, sent only on page actions.
 type Order =

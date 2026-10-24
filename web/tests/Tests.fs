@@ -175,6 +175,33 @@ let tests =
                       Expect.equal (fst (Program.decide simple input)) (fst (Program.decide tree input)) "same move"
           }
 
+          test "random Hamiltonian cycles visit every cell once and close" {
+              // Hamilton.random checks its result with ofCells, which throws on a broken cycle.
+              let rng = Rng.Source 11u
+
+              for _ in 1..200 do
+                  let c = Hamilton.random rng
+                  Expect.equal (Hamilton.ofCells c.Cells) c "valid cycle"
+          }
+
+          test "the Hamiltonian cycle snake never crashes" {
+              let rng = Rng.Source 12u
+
+              for seed in 1u .. 20u do
+                  let mind = Mind.Hamiltonian(Hamilton.random rng)
+                  let mutable now = Alive(Game.start seed)
+
+                  while (match now with
+                         | Alive _ -> true
+                         | _ -> false) do
+                      let g = Game.state now
+                      now <- step (Mind.think mind g).Turn g
+
+                  match now with
+                  | Dead((HitWall | HitSelf) as death, _) -> failtestf "seed %d: %A" seed death
+                  | _ -> ()
+          }
+
           test "the snake starves without fruit" {
               let g = { place [ cell 5 5 ] North (cell 0 0) rng with Hunger = starveAfter 0 }
 

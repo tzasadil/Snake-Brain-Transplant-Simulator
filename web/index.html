@@ -44,6 +44,7 @@
               <option value="net">Neural net</option>
               <option value="neat">NEAT</option>
               <option value="program">Program tree</option>
+              <option value="hamilton">Hamiltonian cycle</option>
             </select>
           </label>
           <canvas id="network" class="network" role="img"
@@ -68,6 +69,12 @@
             <li style="--swatch: var(--text)">Active path</li>
             <li style="--swatch: var(--muted)">Not taken</li>
           </ul>
+          <ul class="legend" id="legend-hamilton" hidden>
+            <li style="--swatch: var(--muted)">Cycle</li>
+            <li style="--swatch: var(--snake)">Snake</li>
+            <li style="--swatch: var(--head)">Next move</li>
+            <li style="--swatch: var(--fruit)">Fruit</li>
+          </ul>
           <ul class="legend" id="legend-fly">
             <li style="--swatch: var(--input)">Visual input</li>
             <li style="--swatch: var(--text)">Interneuron</li>
@@ -91,7 +98,7 @@
       <section class="panel history">
         <canvas id="chart" class="chart" tabindex="0" role="slider" aria-label="Generation to watch"
           aria-valuemin="1" aria-valuemax="1" aria-valuenow="1"></canvas>
-        <div class="controls">
+        <div class="controls" id="training-controls">
           <dl class="stats">
             <div><dt>Generation</dt><dd id="trained">0</dd></div>
             <div><dt>Latest score</dt><dd id="latest">–</dd></div>
@@ -100,6 +107,9 @@
           <button id="train" type="button">Pause</button>
           <label><input id="follow" type="checkbox" checked /> Follow latest</label>
           <button id="restart" type="button">Restart</button>
+        </div>
+        <div class="controls" id="cycle-controls" hidden>
+          <button id="new-cycle" type="button">New cycle</button>
         </div>
       </section>
     </main>

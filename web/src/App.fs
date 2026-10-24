@@ -60,6 +60,7 @@ type private Species =
     | NetSpecies
     | NeatSpecies
     | ProgramSpecies
+    | HamiltonSpecies
     | WiredSpecies of Kind
 
 /// Dropdown value, circuit file, and legend element of each wired kind.
@@ -69,7 +70,7 @@ let private info =
     | Worm -> {| Value = "worm"; Url = wormUrl; Name = "Worm"; Legend = "legend-worm" |}
 
 let private kinds = [ Fly; Worm ]
-let private allSpecies = NetSpecies :: NeatSpecies :: ProgramSpecies :: List.map WiredSpecies kinds
+let private allSpecies = NetSpecies :: NeatSpecies :: ProgramSpecies :: HamiltonSpecies :: List.map WiredSpecies kinds
 
 /// Dropdown value and legend element of each species.
 let private describe =
@@ -77,6 +78,7 @@ let private describe =
     | NetSpecies -> {| Value = "net"; Legend = "legend-net" |}
     | NeatSpecies -> {| Value = "neat"; Legend = "legend-neat" |}
     | ProgramSpecies -> {| Value = "program"; Legend = "legend-program" |}
+    | HamiltonSpecies -> {| Value = "hamilton"; Legend = "legend-hamilton" |}
     | WiredSpecies k -> {| Value = (info k).Value; Legend = (info k).Legend |}
 
 /// Which champion plays next.
@@ -91,8 +93,14 @@ type private Finish =
     | Died of Death
     | Filled
 
+/// Who plays on the board.
+type private Player =
+    | Trained of Champion<Mind.Mind>
+    /// A brain the page builds itself and that never trains: the Hamiltonian cycle.
+    | Built of Mind.Mind
+
 type private Replay =
-    { Champion: Champion<Mind.Mind>
+    { Player: Player
       Game: Game
       /// What the brain computed for the current position. It decides the next move.
       Thought: Mind.Thought }
@@ -109,6 +117,7 @@ let private boardCanvas = canvas "board"
 let private networkCanvas = canvas "network"
 let private chartCanvas = canvas "chart"
 let private trainButton = element "train" :?> HTMLButtonElement
+let private newCycleButton = element "new-cycle" :?> HTMLButtonElement
 let private followBox = element "follow" :?> HTMLInputElement
 let private speedSelect = element "speed" :?> HTMLSelectElement
 let private restartButton = element "restart" :?> HTMLButtonElement
@@ -133,6 +142,8 @@ let mutable private hovered: int option = None
 let mutable private circuits = kinds |> List.map (fun k -> k, Loading) |> Map.ofList
 /// Fruit fly is the default. Its circuit loads after the page, so the first run starts once it arrives.
 let mutable private species = WiredSpecies Fly
+let private newCycle () = Hamilton.random (Rng.Source(newSeed ()))
+let mutable private cycle = newCycle ()
 
 let private circuit () =
     match species with
@@ -143,38 +154,50 @@ let private circuit () =
         | Unavailable -> None
     | NetSpecies
     | NeatSpecies
-    | ProgramSpecies -> None
+    | ProgramSpecies
+    | HamiltonSpecies -> None
 
 let private moveMs () = 160.0 / float speedSelect.value
 
 /// A fresh random game, not the one the champion won in training. Its training game was a lucky draw,
 /// so a fresh game shows how the brain really plays.
-let private begin' (c: Champion<Mind.Mind>) =
+let private mindOf =
+    function
+    | Trained c -> c.Brain
+    | Built mind -> mind
+
+let private generationOf (r: Replay) =
+    match r.Player with
+    | Trained c -> Some c.Generation
+    | Built _ -> None
+
+let private begin' (p: Player) =
     let g = Game.start (newSeed ())
 
     Playing
-        { Champion = c
+        { Player = p
           Game = g
-          Thought = Mind.think c.Brain (vision g) }
+          Thought = Mind.think (mindOf p) g }
 
 /// Hands the game in progress to another champion's brain.
 let private swap (c: Champion<Mind.Mind>) (r: Replay) =
     { r with
-        Champion = c
-        Thought = Mind.think c.Brain (vision r.Game) }
+        Player = Trained c
+        Thought = Mind.think c.Brain r.Game }
 
-let private nextChampion () =
-    match pick with
-    | Latest -> Seq.tryLast champions
-    | Fixed gen when gen >= 1 && gen <= champions.Count -> Some champions[gen - 1]
-    | Fixed _ -> None
+let private nextPlayer () =
+    match species, pick with
+    | HamiltonSpecies, _ -> Some(Built(Mind.Hamiltonian cycle))
+    | _, Latest -> Seq.tryLast champions |> Option.map Trained
+    | _, Fixed gen when gen >= 1 && gen <= champions.Count -> Some(Trained champions[gen - 1])
+    | _, Fixed _ -> None
 
 let private advance t =
     match show with
     | Waiting ->
-        match nextChampion () with
-        | Some c ->
-            show <- begin' c
+        match nextPlayer () with
+        | Some p ->
+            show <- begin' p
             lastMove <- t
         | None -> ()
     | Playing r when t - lastMove >= moveMs () ->
@@ -182,11 +205,11 @@ let private advance t =
 
         show <-
             match step r.Thought.Turn r.Game with
-            | Alive g -> Playing { r with Game = g; Thought = Mind.think r.Champion.Brain (vision g) }
+            | Alive g -> Playing { r with Game = g; Thought = Mind.think (mindOf r.Player) g }
             | Dead(death, _) -> Ended(r, Died death, t)
             | Won g -> Ended({ r with Game = g }, Filled, t)
     | Ended(_, _, at) when t - at >= endHoldMs ->
-        nextChampion () |> Option.iter (fun c -> show <- begin' c)
+        nextPlayer () |> Option.iter (fun p -> show <- begin' p)
         lastMove <- t
     | Playing _
     | Ended _ -> ()
@@ -213,7 +236,12 @@ let private render () =
     | Some r ->
         View.board boardCanvas r.Game r.Thought.Input
         View.thought networkCanvas r.Thought
-        setText (element "generation") (string r.Champion.Generation)
+        setText
+            (element "generation")
+            (match generationOf r with
+             | Some g -> string g
+             | None -> "–")
+
         setText (element "score") (string r.Game.Score)
     | None -> ()
 
@@ -238,7 +266,7 @@ let private render () =
         (if champions.Count = 0 then "–"
          else string (champions |> Seq.map (fun c -> c.Score) |> Seq.max))
 
-    let current = replay |> Option.map (fun r -> r.Champion.Generation)
+    let current = replay |> Option.bind generationOf
     View.chart chartCanvas (champions.ToArray()) current hovered
     chartCanvas.setAttribute ("aria-valuemax", string (max 1 champions.Count))
 
@@ -267,6 +295,7 @@ let private send () =
     | NetSpecies -> worker.postMessage (order "net" None)
     | NeatSpecies -> worker.postMessage (order "neat" None)
     | ProgramSpecies -> worker.postMessage (order "program" None)
+    | HamiltonSpecies -> worker.postMessage (order "none" None)
     | WiredSpecies k ->
         match circuits[k] with
         | Ready(text, _) -> worker.postMessage (order "circuit" (Some text))
@@ -309,7 +338,7 @@ let private select gen =
     if gen >= 1 && gen <= champions.Count then
         pick <- Fixed gen
         followBox.``checked`` <- false
-        show <- begin' champions[gen - 1]
+        show <- begin' (Trained champions[gen - 1])
         lastMove <- now ()
 
 trainButton.onclick <-
@@ -333,7 +362,7 @@ followBox.onchange <-
         else
             match show with
             | Playing r
-            | Ended(r, _, _) -> pick <- Fixed r.Champion.Generation
+            | Ended(r, _, _) -> generationOf r |> Option.iter (fun g -> pick <- Fixed g)
             | Waiting -> ()
 
 /// A new population of the current species. Reports from the old run are dropped by run number.
@@ -357,7 +386,22 @@ let private choose newSpecies =
     for s in allSpecies do
         show' (element (describe s).Legend) (s = newSpecies)
 
+    // The cycle does not train, so it has no history to chart and no training to control.
+    let trains = newSpecies <> HamiltonSpecies
+    show' chartCanvas trains
+    show' (element "training-controls") trains
+    show' (element "cycle-controls") (not trains)
+
+    if not trains then
+        cycle <- newCycle ()
+
     restart ()
+
+newCycleButton.onclick <-
+    fun _ ->
+        cycle <- newCycle ()
+        show <- begin' (Built(Mind.Hamiltonian cycle))
+        lastMove <- now ()
 
 brainSelect.onchange <-
     fun _ ->
@@ -405,7 +449,7 @@ chartCanvas.onkeydown <-
         let current =
             match show with
             | Playing r
-            | Ended(r, _, _) -> r.Champion.Generation
+            | Ended(r, _, _) -> generationOf r |> Option.defaultValue 0
             | Waiting -> 0
 
         match e.key with

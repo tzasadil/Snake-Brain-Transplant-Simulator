@@ -27,7 +27,7 @@
 // Free weights also add a sign gene per edge, starting at the real sign. A mutation flips it outright: with about
 // 56 mutations per child over 5,800 genes, each gene mutates about once per lineage in 60 generations, so a small
 // Gaussian step on a signed weight would almost never cross 0. This breaks Dale's law (one sign per neuron).
-#load "../src/Native.fs" "../src/Rng.fs" "../src/Game.fs" "../src/Brain.fs" "../src/Connectome.fs" "../src/Neat.fs" "../src/Program.fs" "../src/Mind.fs" "../src/Evolution.fs"
+#load "../src/Native.fs" "../src/Rng.fs" "../src/Game.fs" "../src/Brain.fs" "../src/Connectome.fs" "../src/Neat.fs" "../src/Program.fs" "../src/Hamilton.fs" "../src/Mind.fs" "../src/Evolution.fs"
 
 open System
 open System.IO
@@ -128,7 +128,7 @@ let evaluate (mind: Mind.Mind) =
                  | Game.Alive _ -> true
                  | _ -> false) do
               let g = Game.state step
-              step <- Game.step (Mind.think mind (Game.vision g)).Turn g
+              step <- Game.step (Mind.think mind g).Turn g
 
           float (Game.state step).Score ]
     |> List.average

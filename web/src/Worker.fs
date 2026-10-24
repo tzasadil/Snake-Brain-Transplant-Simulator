@@ -74,6 +74,7 @@ and private schedule () =
 onOrder (fun order ->
     session <-
         match session with
+        | _ when order.Species = "none" -> Idle
         | Active(run, train, _) when run = order.Run -> Active(run, train, order.Running)
         | Active _
         | Idle -> Active(order.Run, start order, order.Running)

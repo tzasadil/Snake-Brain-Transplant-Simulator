@@ -359,6 +359,82 @@ let program (canvas: HTMLCanvasElement) (tree: Program.Tree) (answers: bool list
     let tests = lines |> List.filter (fun l -> not l.Leaf) |> List.length
     caption ctx [ "Turn", outputNames[choice]; "Tests", string tests ]
 
+/// The Hamiltonian cycle on the board, each cell numbered by its position along it, with the snake's body on top
+/// and an arrow to the cell it enters next. An earlier version also lit the stretch a shortcut may reach,
+/// but that needed explaining.
+let hamilton (canvas: HTMLCanvasElement) (c: Hamilton.Cycle) (plan: Hamilton.Plan) (choice: int) =
+    let ctx, w, h = fit canvas
+    // Clears the brain picker, which overlaps the canvas top right.
+    let top = 52.0
+    let side = min (w - 24.0) (h - top - 8.0)
+    let cell = side / float size
+    let ox = (w - side) / 2.0
+    let n = c.Cells.Length
+    let at (i: int) = ox + (float (i % size) + 0.5) * cell, top + (float (i / size) + 0.5) * cell
+    let center k = at c.Cells[k % n]
+    let centerOf (p: Cell) = at (p.Y * size + p.X)
+
+    ctx.lineJoin <- "round"
+    ctx.lineCap <- "round"
+    ctx.strokeStyle <- !^Color.muted
+    ctx.globalAlpha <- 0.35
+    ctx.lineWidth <- 2.0
+    ctx.beginPath ()
+    let x0, y0 = center 0
+    ctx.moveTo (x0, y0)
+
+    for k in 1..n do
+        let x, y = center k
+        ctx.lineTo (x, y)
+
+    ctx.stroke ()
+    ctx.globalAlpha <- 1.0
+
+    ctx.font <- $"{min 11.0 (cell * 0.26)}px system-ui, sans-serif"
+    ctx.textAlign <- "left"
+    ctx.textBaseline <- "top"
+    ctx.fillStyle <- !^Color.muted
+
+    for k in 0 .. n - 1 do
+        let i = c.Cells[k]
+        ctx.fillText (string k, ox + float (i % size) * cell + 3.0, top + float (i / size) * cell + 2.0)
+
+    let fx, fy = center plan.Fruit
+    ctx.fillStyle <- !^Color.fruit
+    circle ctx fx fy (cell * 0.18)
+    ctx.fill ()
+
+    ctx.strokeStyle <- !^Color.snake
+    ctx.lineWidth <- cell * 0.16
+    plan.Body |> List.pairwise |> List.iter (fun (a, b) ->
+        let ax, ay = centerOf a
+        let bx, by = centerOf b
+        line ctx ax ay bx by)
+
+    let hx, hy = center plan.Head
+    ctx.fillStyle <- !^Color.snake
+    circle ctx hx hy (cell * 0.14)
+    ctx.fill ()
+
+    // Arrow from the head into the next cell, its tip short of the cell center so the number stays readable.
+    let tx, ty = center plan.Target
+    let dx, dy = (tx - hx) / cell, (ty - hy) / cell
+    let tipX, tipY = hx + dx * cell * 0.75, hy + dy * cell * 0.75
+    let wing = cell * 0.16
+    ctx.strokeStyle <- !^Color.head
+    ctx.fillStyle <- !^Color.head
+    ctx.lineWidth <- 2.5
+    line ctx hx hy (tipX - dx * wing) (tipY - dy * wing)
+    ctx.beginPath ()
+    ctx.moveTo (tipX, tipY)
+    ctx.lineTo (tipX - dx * wing * 1.6 - dy * wing, tipY - dy * wing * 1.6 + dx * wing)
+    ctx.lineTo (tipX - dx * wing * 1.6 + dy * wing, tipY - dy * wing * 1.6 - dx * wing)
+    ctx.closePath ()
+    ctx.fill ()
+    ctx.lineCap <- "butt"
+
+    caption ctx [ "Turn", outputNames[choice]; "Jump", string ((plan.Target - plan.Head + n) % n) ]
+
 /// A connectome circuit at real soma positions over a faint outline: the fly brain seen from behind,
 /// so its left is on the left, or the worm from the side, head on the left.
 /// Synapses show only while they carry signal, so the active paths stand out of thousands.
@@ -440,6 +516,7 @@ let thought (canvas: HTMLCanvasElement) (t: Mind.Thought) =
     | Mind.Neurons(circuit, h) -> connectome canvas circuit h t.Turn
     | Mind.Graph(net, value) -> neat canvas net value (choiceIndex t.Turn)
     | Mind.Path(tree, answers) -> program canvas tree answers (choiceIndex t.Turn)
+    | Mind.Route(cycle, plan) -> hamilton canvas cycle plan (choiceIndex t.Turn)
 
 /// Generation x position on the chart. Bars keep a minimum width until history outgrows it.
 let private slots count = max count 60

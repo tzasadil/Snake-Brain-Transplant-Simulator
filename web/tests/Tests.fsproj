@@ -13,6 +13,7 @@
     <Compile Include="../src/Connectome.fs" />
     <Compile Include="../src/Neat.fs" />
     <Compile Include="../src/Program.fs" />
+    <Compile Include="../src/Hamilton.fs" />
     <Compile Include="../src/Mind.fs" />
     <Compile Include="../src/Evolution.fs" />
     <Compile Include="Tests.fs" />

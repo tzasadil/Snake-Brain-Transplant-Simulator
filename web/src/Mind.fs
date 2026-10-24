@@ -10,6 +10,7 @@ type Mind =
     /// Compiled once per genome, not per move.
     | Grown of Neat.Net
     | Rules of Program.Tree
+    | Hamiltonian of Hamilton.Cycle
 
 /// What a mind computed, carrying what the matching view needs to draw it.
 type Activity =
@@ -21,13 +22,19 @@ type Activity =
     | Graph of Neat.Net * float[]
     /// Program tree and the answer to each test on the way to the chosen move.
     | Path of Program.Tree * bool list
+    /// Cycle and the positions behind the move.
+    | Route of Hamilton.Cycle * Hamilton.Plan
 
 type Thought =
     { Input: float[]
       Activity: Activity
       Turn: Turn }
 
-let think mind (input: float[]) =
+/// Takes the whole game, because the Hamiltonian cycle needs positions, not only senses.
+/// Input is the senses either way, so the board can draw the rays.
+let think mind (g: Game) =
+    let input = vision g
+
     match mind with
     | Net brain ->
         let layers = Brain.think brain input
@@ -52,4 +59,10 @@ let think mind (input: float[]) =
 
         { Input = input
           Activity = Path(tree, path)
+          Turn = turn }
+    | Hamiltonian cycle ->
+        let turn, plan = Hamilton.decide cycle g
+
+        { Input = input
+          Activity = Route(cycle, plan)
           Turn = turn }

@@ -124,14 +124,18 @@ let private turn t h =
 
     headings[(headingIndex h + delta) % 4]
 
+/// The cell the head enters on turn t. It may lie outside the board.
+let target t g =
+    let dx, dy = offset (turn t g.Heading)
+    let head = List.head g.Body
+    { X = head.X + dx; Y = head.Y + dy }
+
 let step t g =
     if g.Hunger = starveAfter g.Score then
         Dead(Starved, g)
     else
         let heading = turn t g.Heading
-        let dx, dy = offset heading
-        let head = List.head g.Body
-        let next = { X = head.X + dx; Y = head.Y + dy }
+        let next = target t g
 
         if not (inBounds next) then
             Dead(HitWall, g)

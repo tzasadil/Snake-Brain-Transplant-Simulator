@@ -12,6 +12,7 @@
     <Compile Include="Connectome.fs" />
     <Compile Include="Neat.fs" />
     <Compile Include="Program.fs" />
+    <Compile Include="Hamilton.fs" />
     <Compile Include="Mind.fs" />
     <Compile Include="Evolution.fs" />
     <Compile Include="Protocol.fs" />
