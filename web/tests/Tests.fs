@@ -141,6 +141,40 @@ let tests =
               Expect.isGreaterThan grown 2 "genomes grew hidden neurons"
           }
 
+          test "program trees survive the trip to the page" {
+              let rng = Rng.Source 5u
+              let mutable trees = List.init 50 (fun _ -> Program.random rng)
+
+              for _ in 1..200 do
+                  trees <- Program.crossover rng (List.item (rng.Int 50) trees) (List.item (rng.Int 50) trees) :: List.truncate 49 trees
+
+              for tree in trees do
+                  Expect.equal (Program.decode (Program.encode tree)) tree "round trip"
+          }
+
+          test "simplifying a program tree never changes a move" {
+              let rng = Rng.Source 8u
+              // Positions from games of random moves, so the tests see real senses.
+              let positions =
+                  [ for seed in 1u .. 30u do
+                        let mutable now = Alive(Game.start seed)
+
+                        while (match now with
+                               | Alive _ -> true
+                               | _ -> false) do
+                            let g = Game.state now
+                            yield vision g
+                            let turn = [| TurnLeft; Straight; TurnRight |][rng.Int 3]
+                            now <- step turn g ]
+
+              for _ in 1..300 do
+                  let tree = Program.random rng
+                  let simple = Program.simplify tree
+
+                  for input in positions do
+                      Expect.equal (fst (Program.decide simple input)) (fst (Program.decide tree input)) "same move"
+          }
+
           test "the snake starves without fruit" {
               let g = { place [ cell 5 5 ] North (cell 0 0) rng with Hunger = starveAfter 0 }
 

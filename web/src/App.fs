@@ -59,6 +59,7 @@ type private Kind =
 type private Species =
     | NetSpecies
     | NeatSpecies
+    | ProgramSpecies
     | WiredSpecies of Kind
 
 /// Dropdown value, circuit file, and legend element of each wired kind.
@@ -68,13 +69,14 @@ let private info =
     | Worm -> {| Value = "worm"; Url = wormUrl; Name = "Worm"; Legend = "legend-worm" |}
 
 let private kinds = [ Fly; Worm ]
-let private allSpecies = NetSpecies :: NeatSpecies :: List.map WiredSpecies kinds
+let private allSpecies = NetSpecies :: NeatSpecies :: ProgramSpecies :: List.map WiredSpecies kinds
 
 /// Dropdown value and legend element of each species.
 let private describe =
     function
     | NetSpecies -> {| Value = "net"; Legend = "legend-net" |}
     | NeatSpecies -> {| Value = "neat"; Legend = "legend-neat" |}
+    | ProgramSpecies -> {| Value = "program"; Legend = "legend-program" |}
     | WiredSpecies k -> {| Value = (info k).Value; Legend = (info k).Legend |}
 
 /// Which champion plays next.
@@ -140,7 +142,8 @@ let private circuit () =
         | Loading
         | Unavailable -> None
     | NetSpecies
-    | NeatSpecies -> None
+    | NeatSpecies
+    | ProgramSpecies -> None
 
 let private moveMs () = 160.0 / float speedSelect.value
 
@@ -263,6 +266,7 @@ let private send () =
     match species with
     | NetSpecies -> worker.postMessage (order "net" None)
     | NeatSpecies -> worker.postMessage (order "neat" None)
+    | ProgramSpecies -> worker.postMessage (order "program" None)
     | WiredSpecies k ->
         match circuits[k] with
         | Ready(text, _) -> worker.postMessage (order "circuit" (Some text))

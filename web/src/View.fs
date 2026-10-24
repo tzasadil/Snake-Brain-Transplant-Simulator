@@ -277,6 +277,88 @@ let neat (canvas: HTMLCanvasElement) (net: Neat.Net) (value: float[]) (choice: i
     outputLabels ctx right (evenY Neat.outputCount) choice
     caption ctx [ "Grown", string hidden; "Links", string net.Source.Length ]
 
+let private testLabel =
+    function
+    | Program.Blocked ray -> $"blocked {rayLabels[ray]}"
+    | Program.Within(ray, thing, cells) ->
+        let name =
+            match thing with
+            | Program.Wall -> "wall"
+            | Program.Body -> "body"
+            | Program.Fruit -> "fruit"
+
+        $"{name} {rayLabels[ray]} ≤{cells}"
+    | Program.FruitTo side ->
+        match side with
+        | Program.Ahead -> "fruit ahead"
+        | Program.Behind -> "fruit behind"
+        | Program.Left -> "fruit left"
+        | Program.Right -> "fruit right"
+    | Program.Longer cells -> $"length > {cells}"
+
+type private Line =
+    { Guide: string
+      Branch: string
+      Text: string
+      Lit: bool
+      Leaf: bool }
+
+/// One line per node, preorder, with tree guides. Lit lines lie on the path the answers took.
+let private treeLines (tree: Program.Tree) (answers: bool list) =
+    let rec go guide branch indent tree lit answers =
+        match tree with
+        | Program.Do turn ->
+            [ { Guide = guide
+                Branch = branch
+                Text = outputNames[choiceIndex turn]
+                Lit = lit
+                Leaf = true } ]
+        | Program.If(test, yes, no) ->
+            let answer, rest =
+                match answers with
+                | a :: rest when lit -> Some a, rest
+                | _ -> None, []
+
+            { Guide = guide
+              Branch = branch
+              Text = testLabel test + "?"
+              Lit = lit
+              Leaf = false }
+            :: go (indent + "├ ") "yes " (indent + "│ ") yes (answer = Some true) rest
+            @ go (indent + "└ ") "no  " (indent + "  ") no (answer = Some false) rest
+
+    go "" "" "" tree true answers
+
+/// A program tree as indented rules. The tests on the way to this move are lit, the chosen move green.
+let program (canvas: HTMLCanvasElement) (tree: Program.Tree) (answers: bool list) (choice: int) =
+    let ctx, _, h = fit canvas
+    let lines = treeLines tree answers
+    let top = 30.0
+    let lineH = min 22.0 ((h - top - 4.0) / float lines.Length)
+    let font = $"{min 15.0 (lineH * 0.8)}px ui-monospace, monospace"
+    ctx.font <- font
+    ctx.textBaseline <- "middle"
+    ctx.textAlign <- "left"
+    let charW = ctx.measureText("m").width
+
+    lines
+    |> List.iteri (fun k line ->
+        let y = top + lineH * (float k + 0.5)
+        let x = 12.0 + charW * float line.Guide.Length
+        ctx.globalAlpha <- if line.Lit then 1.0 else 0.45
+        ctx.fillStyle <- !^Color.muted
+        ctx.fillText (line.Guide + line.Branch, 12.0, y)
+
+        ctx.fillStyle <-
+            !^(if line.Lit && line.Leaf then Color.snake
+               elif line.Lit then Color.text
+               else Color.muted)
+
+        ctx.fillText (line.Text, x + charW * float line.Branch.Length, y))
+
+    let tests = lines |> List.filter (fun l -> not l.Leaf) |> List.length
+    caption ctx [ "Turn", outputNames[choice]; "Tests", string tests ]
+
 /// A connectome circuit at real soma positions over a faint outline: the fly brain seen from behind,
 /// so its left is on the left, or the worm from the side, head on the left.
 /// Synapses show only while they carry signal, so the active paths stand out of thousands.
@@ -357,6 +439,7 @@ let thought (canvas: HTMLCanvasElement) (t: Mind.Thought) =
     | Mind.Layers(brain, layers) -> network canvas brain layers (choiceIndex t.Turn)
     | Mind.Neurons(circuit, h) -> connectome canvas circuit h t.Turn
     | Mind.Graph(net, value) -> neat canvas net value (choiceIndex t.Turn)
+    | Mind.Path(tree, answers) -> program canvas tree answers (choiceIndex t.Turn)
 
 /// Generation x position on the chart. Bars keep a minimum width until history outgrows it.
 let private slots count = max count 60

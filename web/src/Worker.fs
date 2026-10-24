@@ -36,6 +36,9 @@ let private start (order: Order) : Train =
     | "neat", _ ->
         let trainer = Trainer(order.Seed, neat ())
         fun hasTime -> trainer.Train hasTime |> List.map (reportNeat order.Run)
+    | "program", _ ->
+        let trainer = Trainer(order.Seed, program)
+        fun hasTime -> trainer.Train hasTime |> List.map (reportProgram order.Run)
     | "circuit", Some text ->
         match parseCircuit text with
         | Ok circuit ->

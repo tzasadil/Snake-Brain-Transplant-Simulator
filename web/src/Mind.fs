@@ -9,6 +9,7 @@ type Mind =
     | Wired of Connectome.Circuit * Connectome.Genome
     /// Compiled once per genome, not per move.
     | Grown of Neat.Net
+    | Rules of Program.Tree
 
 /// What a mind computed, carrying what the matching view needs to draw it.
 type Activity =
@@ -18,6 +19,8 @@ type Activity =
     | Neurons of Connectome.Circuit * float[]
     /// NEAT net and the value of each of its nodes, by index.
     | Graph of Neat.Net * float[]
+    /// Program tree and the answer to each test on the way to the chosen move.
+    | Path of Program.Tree * bool list
 
 type Thought =
     { Input: float[]
@@ -44,3 +47,9 @@ let think mind (input: float[]) =
         { Input = input
           Activity = Graph(net, value)
           Turn = Brain.decide (Neat.outputs value) }
+    | Rules tree ->
+        let turn, path = Program.decide tree input
+
+        { Input = input
+          Activity = Path(tree, path)
+          Turn = turn }

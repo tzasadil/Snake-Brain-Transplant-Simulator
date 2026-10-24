@@ -32,6 +32,11 @@ let neat () =
       Crossover = Neat.crossover innovations
       Mind = Neat.compile >> Grown }
 
+let program =
+    { Random = Program.random
+      Crossover = Program.crossover
+      Mind = Rules }
+
 type Champion<'G> =
     { Generation: int
       Brain: 'G

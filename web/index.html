@@ -43,6 +43,7 @@
               <option value="worm" id="worm-option">Worm</option>
               <option value="net">Neural net</option>
               <option value="neat">NEAT</option>
+              <option value="program">Program tree</option>
             </select>
           </label>
           <canvas id="network" class="network" role="img"
@@ -61,6 +62,11 @@
             <li style="--swatch: var(--text)">Grown neuron</li>
             <li style="--swatch: var(--positive)">Weight +</li>
             <li style="--swatch: var(--negative)">Weight −</li>
+          </ul>
+          <ul class="legend" id="legend-program" hidden>
+            <li style="--swatch: var(--snake)">Chosen move</li>
+            <li style="--swatch: var(--text)">Active path</li>
+            <li style="--swatch: var(--muted)">Not taken</li>
           </ul>
           <ul class="legend" id="legend-fly">
             <li style="--swatch: var(--input)">Visual input</li>
