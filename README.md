@@ -4,7 +4,7 @@ A Snake game in F# with swappable brains. Give the snake a brain and watch it le
 
 **[Watch it evolve in your browser](https://tzasadil.github.io/Snake-Brain-Transplant-Simulator/)**
 
-![Generation 1 starves, then generation 74 hunts fruit while its network lights up](docs/demo.gif)
+![The fruit fly brain: generation 1 drives into a wall, generation 69 hunts fruit while its circuit lights up](docs/demo.gif)
 
 ## Brains
 
